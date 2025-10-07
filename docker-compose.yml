@@ -1,0 +1,10 @@
+version: '3.8'
+
+services:
+  streamlit-app:
+    build: .
+    ports:
+      - "8501:8501"  # host:container
+    environment:
+      - STREAMLIT_SERVER_PORT=8501
+    command: streamlit run main.py --server.port=8501 --server.address=0.0.0.0
