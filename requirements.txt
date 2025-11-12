@@ -1,7 +1,10 @@
-streamlit
 pandas
 numpy
 matplotlib
 scipy
 influxdb-client
 python-dotenv
+st_autorefresh
+dash
+plotly
+psutil

@@ -1,15 +1,14 @@
 version: '3.8'
 
 services:
-  streamlit-app:
+  dash-app:
     build: .
     ports:
-      - "8501:8501"  # host:container
+      - "8050:8050" # host:container
     environment:
-      - STREAMLIT_SERVER_PORT=8501
       - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
       - INFLUXDB_URL=${INFLUXDB_URL}
       - INFLUXDB_ORG=${INFLUXDB_ORG}
-    command: streamlit run main.py --server.port=8501 --server.address=0.0.0.0
+    command: python app_dash.py
     volumes:
       - .:/app
