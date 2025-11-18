@@ -1,5 +1,6 @@
 import pandas as pd
 
+
 def procesar_datos_para_mapa(df):
     """Procesar los datos para el mapa - Mismo código"""
     if df.empty:

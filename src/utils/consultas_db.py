@@ -4,7 +4,7 @@ import pandas as pd
 
 
 def obtener_datos_influxdb():
-    """Obtener datos reales de InfluxDB - Mismo código"""
+    """Obtener datos reales de InfluxDB - Mismo código ejemplos"""
     try:
         client = influxdb_client.InfluxDBClient(
             url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG
