@@ -151,10 +151,7 @@ estilo_interfaz = """
                 border-radius: 8px;
             }
             
-            /* Colorbar fuera del gráfico */
-            .js-plotly-plot .plotly .colorbar {
-                right: -80px !important; /* Mover colorbar fuera */
-            }
+            
             
             /* Contenedor del gráfico con overflow controlado */
             .dash-graph {
@@ -210,30 +207,21 @@ estilo_interfaz = """
             /* Asegurar que el contenedor del gráfico tenga espacio suficiente */
             .dash-graph {
                 position: relative;
-                width: calc(100% - 40px) !important; /* Dejar espacio para la colorbar */
+                
                 margin-right: 40px;
             }
 
-            /* Mover la colorbar completamente afuera */
-            .js-plotly-plot .plotly .colorbar {
-                right: -60px !important;
-            }
-
-            /* Fuerza la posición de la colorbar */
-.plotly .colorbar {
-    right: -80px !important;
-    left: auto !important;
-}
-
+            
+      
 /* Asegura que el contenedor principal tenga espacio */
 .main-svg {
     width: 100% !important;
     overflow: visible !important;
 }
 
-/* Contenedor del gráfico con padding para la colorbar */
+
 .dash-graph {
-    padding-right: 100px !important;
+    
     box-sizing: border-box !important;
 }
 

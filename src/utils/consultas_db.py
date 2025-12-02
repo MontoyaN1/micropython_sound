@@ -1,92 +1,80 @@
 from ..config import INFLUXDB_TOKEN, INFLUXDB_URL, INFLUXDB_ORG
 import influxdb_client
 import pandas as pd
+import yaml
+
+
+def cargar_configuracion():
+    """Cargar configuración de sensores desde YAML"""
+    with open("config/sensores.yaml", "r") as file:
+        return yaml.safe_load(file)
 
 
 def obtener_datos_influxdb():
-    """Obtener datos reales de InfluxDB - Mismo código ejemplos"""
+    """Obtener datos y añadir coordenadas desde configuración"""
     try:
         client = influxdb_client.InfluxDBClient(
             url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG
         )
         query_api = client.query_api()
 
+        # Consulta para TODOS los sensores
         query = """
-        from(bucket: "a")
-          |> range(start: -5m)
-          |> filter(fn: (r) => r._field == "value" or r._field == "latitude" or r._field == "longitude")
+        from(bucket: "sensores")
+          |> range(start: -5h)
+          |> filter(fn: (r) => r["_measurement"] == "sonido" and r["_field"] == "valor")
+          |> aggregateWindow(every: 30s, fn: mean)
         """
 
         tables = query_api.query(query)
-        sensores_dict = {}
+        config = cargar_configuracion()
+        datos = []
 
         for table in tables:
             for record in table.records:
-                sensor_name = record.values.get("_measurement", "unknown")
+                micro_id = record.values.get("micro_id")
+                sensor_id = record.values.get("sensor_id")
 
-                sensor_mapping = {
-                    "sensor1": 1,
-                    "sensor2": 2,
-                    "sensor3": 3,
-                    "sensor4": 4,
-                    "sensor5": 5,
-                    "sensor6": 6,
-                    "sensor7": 7,
-                    "sensor8": 8,
-                }
-                sensor_id = sensor_mapping.get(sensor_name, 0)
+                # Buscar en configuración
+                if micro_id in config["sensores"]:
+                    micro_config = config["sensores"][micro_id]
+                    base_lat, base_lon = micro_config["ubicacion_base"]
 
-                location_mapping = {
-                    1: {"micro_id": "MIC001", "location_name": "Zona Norte"},
-                    2: {"micro_id": "MIC001", "location_name": "Zona Sur"},
-                    3: {"micro_id": "MIC003", "location_name": "Zona Este"},
-                    4: {"micro_id": "MIC004", "location_name": "Zona Oeste"},
-                    5: {"micro_id": "MIC005", "location_name": "Centro"},
-                    6: {"micro_id": "MIC006", "location_name": "Periferia N"},
-                    7: {"micro_id": "MIC007", "location_name": "Periferia S"},
-                    8: {"micro_id": "MIC008", "location_name": "Periferia E"},
-                }
-                location_info = location_mapping.get(
-                    sensor_id,
+                    if sensor_id in micro_config["sensores"]:
+                        sensor_config = micro_config["sensores"][sensor_id]
+                        offset_lon, offset_lat = sensor_config["offset"]
+                        lat = offset_lat
+                        lon = offset_lon
+                        location_name = (
+                            f"{micro_config['nombre_zona']} - {sensor_config['nombre']}"
+                        )
+                        sensor_num = sensor_config["id"]
+                    else:
+                        lat, lon = base_lat, base_lon
+                        location_name = f"{micro_config['nombre_zona']} - {sensor_id}"
+                        sensor_num = 0
+                else:
+                    # Valores por defecto
+                    lat, lon = 4.609710, -74.081749
+                    location_name = f"Desconocido - {micro_id}"
+                    sensor_num = 0
+
+                datos.append(
                     {
-                        "micro_id": f"MIC{sensor_id:03d}",
-                        "location_name": f"Zona {sensor_id}",
-                    },
+                        "time": record.get_time(),
+                        "micro_id": micro_id,
+                        "sensor_id": sensor_id,
+                        "measurement": "sonido",
+                        "value": record.get_value(),
+                        "location_name": location_name,
+                        "latitude": lat,
+                        "longitude": lon,
+                        "sensor_numero": sensor_num,
+                    }
                 )
 
-                key = f"{sensor_name}_{record.get_time().timestamp()}"
-                if key not in sensores_dict:
-                    sensores_dict[key] = {
-                        "time": record.get_time(),
-                        "sensor_id": sensor_id,
-                        "micro_id": location_info["micro_id"],
-                        "location_name": location_info["location_name"],
-                        "measurement": sensor_name,
-                        "value": None,
-                        "latitude": None,
-                        "longitude": None,
-                    }
-
-                field = record.get_field()
-                value = record.get_value()
-                if field == "value":
-                    sensores_dict[key]["value"] = value
-                elif field == "latitude":
-                    sensores_dict[key]["latitude"] = value
-                elif field == "longitude":
-                    sensores_dict[key]["longitude"] = value
-
-        sensores = []
-        for key, data in sensores_dict.items():
-            if (
-                data["latitude"] is not None
-                and data["longitude"] is not None
-                and data["value"] is not None
-            ):
-                sensores.append(data)
-
-        return pd.DataFrame(sensores)
+        return pd.DataFrame(datos)
 
     except Exception as e:
-        print(f"Error conectando a InfluxDB: {e}")
+        print(f"Error: {e}")
         return pd.DataFrame()

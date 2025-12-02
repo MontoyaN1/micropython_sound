@@ -232,7 +232,7 @@ interfaz_principal = html.Div(
         # Intervalo para actualización automática
         dcc.Interval(
             id="interval-component",
-            interval=10 * 1000,
+            interval=5 * 1000,
             n_intervals=0,
         ),
         # Almacenamiento de datos

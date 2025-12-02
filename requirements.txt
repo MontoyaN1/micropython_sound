@@ -8,3 +8,4 @@ st_autorefresh
 dash
 plotly
 psutil
+PyYAML
