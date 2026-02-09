@@ -26,7 +26,7 @@ audio_in = I2S(
     ibuf=5000,
 )
 audio_in2 = I2S(
-    0,
+    1,
     sck=Pin(14),
     ws=Pin(25),
     sd=Pin(34),
