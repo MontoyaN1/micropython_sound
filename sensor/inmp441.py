@@ -1,209 +1,116 @@
-"""El siguiente código es la logica para capturar los datos del
-sensor de sonido (INMP441), con el fin de determinar los decibelios
- y enviarlo a un servicio en la nube por MQTT. Además de contar con un apartado para ver el uso de RAM"""
+"""Versión para probar funcionamientos de loe sensores para el ESP32 y el INMP441."""
+
+import math
+import time
 
 from machine import I2S, Pin
-import time
-import math
-import network
-from umqtt.simple import MQTTClient
-import json
-import gc
-from config import *
 
-# Logica conexión con sensor y conversion a decibelios
-# //////////////////////////////////////////////////////
+# Configuración
+SCK_PIN = 14
+WS_PIN = 25
+SD_PIN = 34
+SAMPLE_RATE = 16000
+BITS = 16
+FORMAT = I2S.MONO
+BUFFER_SIZE = 20000
 
-audio_in = I2S(
-    0,
-    sck=Pin(14),
-    ws=Pin(25),
-    sd=Pin(35),
-    mode=I2S.RX,
-    bits=16,
-    format=I2S.MONO,
-    rate=16000,
-    ibuf=5000,
-)
-audio_in2 = I2S(
-    1,
-    sck=Pin(14),
-    ws=Pin(25),
-    sd=Pin(34),
-    mode=I2S.RX,
-    bits=16,
-    format=I2S.MONO,
-    rate=16000,
-    ibuf=5000,
-)
-
-samples = bytearray(512)
-samples2 = bytearray(512)
+# Constantes para cálculo de dB
 SENSIBILIDAD = -3.0
 P_REF = 0.00002
 VOLTAJE_REF = 3.3
 MAX_AMPLITUD = 32767
 
+# Inicialización I2S
+audio_in = I2S(
+    0,
+    sck=Pin(SCK_PIN),
+    ws=Pin(WS_PIN),
+    sd=Pin(SD_PIN),
+    mode=I2S.RX,
+    bits=BITS,
+    format=FORMAT,
+    rate=SAMPLE_RATE,
+    ibuf=BUFFER_SIZE,
+)
 
-def amplitud_a_dB(amplitud):
-    if amplitud < 2:
-        return 0
-    voltaje = (amplitud / MAX_AMPLITUD) * VOLTAJE_REF
-    factor = 10 ** (SENSIBILIDAD / 20)
-    presion = voltaje / factor
-    if presion < P_REF:
-        return 0
-    return max(0, 20 * math.log10(presion / P_REF))
+samples = bytearray(512)
 
 
 def bytes_to_signed(byte_data):
+    """Convierte 2 bytes a valor con signo de 16 bits."""
     value = int.from_bytes(byte_data, "little")
     return value - 65536 if value >= 32768 else value
 
 
 def calcular_RMS(samples, bytes_read):
-    suma, count = 0, min(100, bytes_read // 2)
+    """Calcula el valor RMS de las muestras."""
+    if bytes_read < 2:
+        return 0
+
+    suma = 0
+    count = bytes_read // 2
+
     for j in range(0, count * 2, 2):
         sample = bytes_to_signed(samples[j : j + 2])
         suma += sample * sample
-    return int(math.sqrt(suma / count)) if count > 0 else 0
+
+    return math.sqrt(suma / count) if count > 0 else 0
 
 
-# //////////////////////////////////////////////////////
+def amplitud_a_dB(amplitud):
+    """Convierte amplitud RMS a decibelios."""
+    if amplitud < 2:
+        return 0.0
 
-# Logica de envió MQTT a servidor y conexión WIFi
-# //////////////////////////////////////////////////////
+    voltaje = (amplitud / MAX_AMPLITUD) * VOLTAJE_REF
+    factor = 10 ** (SENSIBILIDAD / 20)
+    presion = voltaje / factor
 
-SSID = WIFI_SSID
-SSID_PASS = WIFI_PASSWORD
-SERVER = MQTT_BROKER
-SERVER_PORT = MQTT_PORT
+    if presion < P_REF:
+        return 0.0
 
-
-def connect_wifi():
-    wlan = network.WLAN(network.STA_IF)
-    wlan.active(True)
-
-    if not wlan.isconnected():
-        print("Conectando a WiFi...")
-        wlan.connect(SSID, SSID_PASS)
-
-        for i in range(15):
-            if wlan.isconnected():
-                break
-            time.sleep(1)
-
-    if wlan.isconnected():
-        print("WiFi conectada:", wlan.ifconfig()[0])
-        return True
-    else:
-        print("Error: No se pudo conectar a WiFi")
-        return False
+    dB = 20 * math.log10(presion / P_REF)
+    return max(0.0, dB)
 
 
-def mqtt_callback(topic, msg):
-    print(f"MQTT: {topic} -> {msg}")
-
-
-def connect_mqtt():
-    try:
-        client = MQTTClient(
-            client_id="micro_01", server=SERVER, port=SERVER_PORT, keepalive=30
-        )
-        client.set_callback(mqtt_callback)
-        client.connect()
-        print("Conectado a MQTT")
-        return client
-    except OSError as e:
-        print(f"Error de red MQTT: {e}")
-        return None
-    except Exception as e:
-        print(f"Error MQTT: {e}")
-        return None
-
-
-def publish_mqtt(sensor_data: dict, client: MQTTClient):
-    """Publicar datos de sensores en formato JSON"""
-    try:
-        payload = json.dumps(sensor_data)
-        client.publish("sensors/sound/data", payload)
-        print(f"Datos publicados: {payload}")
-    except Exception as e:
-        print(f"Error publicando MQTT: {e}")
-
-
-# //////////////////////////////////////////////////////
-
-# Logica principal o main
-# //////////////////////////////////////////////////////
-try:
-    print("SONÓMETRO INMP441")
+def main():
+    print("INMP441 - dB cada 1 segundo")
     print("Ctrl+C para detener\n")
 
-    gc.collect()
-    client = None
+    try:
+        suma_cuadrados = 0
+        total_muestras = 0
+        lecturas = 0
 
-    wifi = connect_wifi()
-    dB: float = 0.0
-    dB2: float = 0.0
+        while True:
+            bytes_read = audio_in.readinto(samples)
 
-    while True:
-        if not wifi:
-            print("Sin conexión WiFi, reintentando...")
-            time.sleep(5)
-            continue
+            if bytes_read > 0:
+                rms = calcular_RMS(samples, bytes_read)
+                suma_cuadrados += rms * rms
+                total_muestras += 1
 
-        if client is None:
-            try:
-                client = connect_mqtt()
-            except Exception as e:
-                print(f"Error conectando MQTT: {e}")
-                client = None
-                time.sleep(3)
-                continue
+            lecturas += 1
 
-        bytes_read = audio_in.readinto(samples)
-        bytes_read2 = audio_in2.readinto(samples2)
+            # Cada 1 segundo (10 lecturas)
+            if lecturas >= 10:
+                if total_muestras > 0:
+                    rms_promedio = math.sqrt(suma_cuadrados / total_muestras)
+                    dB = amplitud_a_dB(rms_promedio)
+                    print(f"{dB:.1f} dB")
 
-        if bytes_read > 0 and bytes_read2 > 0:
-            amplitud = calcular_RMS(samples, bytes_read)
-            amplitud2 = calcular_RMS(samples2, bytes_read2)
-            dB = amplitud_a_dB(amplitud)
-            dB2 = amplitud_a_dB(amplitud2)
+                # Reiniciar
+                suma_cuadrados = 0
+                total_muestras = 0
+                lecturas = 0
 
-            print(f"Sensor 1: {dB:.1f} dB")
-            print(f"Sensor 2: {dB2:.1f} dB")
+            time.sleep(0.1)
 
-            # Payload
-            sensor_data = {
-                "micro_id": "micro_01",
-                "sensors": [
-                    {"sensor_id": "sound_01", "value": int(dB)},
-                    {"sensor_id": "sound_02", "value": int(dB2)},
-                ],
-            }
+    except KeyboardInterrupt:
+        print("\nMedición finalizada")
+    finally:
+        audio_in.deinit()
 
-        publish_mqtt(sensor_data, client)
 
-        gc.collect()
-        current_mem = gc.mem_free()
-        used_mem = gc.mem_alloc()
-
-        print(f"RAM libre: {current_mem / 1000} KB | RAM usada: {used_mem / 1000} KB")
-
-        time.sleep(1)
-
-except KeyboardInterrupt:
-    print("\nMedición finalizada")
-except Exception as e:
-    print("Error en main:", e)
-finally:
-    if client:
-        try:
-            client.disconnect()
-        except Exception as e:
-            print(f"Error: {e}")
-
-    audio_in.deinit()
-    audio_in2.deinit()
-# //////////////////////////////////////////////////////
+if __name__ == "__main__":
+    main()
