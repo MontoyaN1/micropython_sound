@@ -14,6 +14,7 @@ SD_PIN = 34
 SAMPLE_RATE = 16000
 PEER_MAC = b"\x88\x57\x21\x95\x4d\x44"
 MICRO_ID = "E1"  # La idea es iterando de 1 a 254, es E por ESP
+LED_PIN = 2  # LED integrado en la placa ESP32
 
 # Inicializar I2S
 audio_in = I2S(
@@ -28,6 +29,10 @@ audio_in = I2S(
     ibuf=20000,
 )
 samples = bytearray(512)
+
+# Inicializar LED
+led = Pin(LED_PIN, Pin.OUT)
+led.off()
 
 # Inicializar ESPNOW
 sta = network.WLAN(network.STA_IF)
@@ -72,8 +77,8 @@ try:
 
         ciclo += 1
 
-        # Cada 1 segundo (10 ciclos de 0.1s)
-        if ciclo >= 10 and muestras > 0:
+        # Cada 5 segundos (50 ciclos de 0.1s)
+        if ciclo >= 50 and muestras > 0:
             # Calcular dB
             rms_prom = math.sqrt(suma_cuadrados / muestras)
 
@@ -93,6 +98,11 @@ try:
             # Formatear y enviar mensaje
             mensaje = f"{MICRO_ID}:{dB:.1f}"
             e.send(PEER_MAC, mensaje, False)
+
+            # Encender LED para indicar envío
+            led.on()
+            time.sleep(0.1)
+            led.off()
 
             # Mostrar datos enviados (esto es lo importante)
             print(f" ENVIADO: {mensaje}")
