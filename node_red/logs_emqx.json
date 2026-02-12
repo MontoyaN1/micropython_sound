@@ -1,0 +1,17 @@
+{
+  "id": "10ce6d88453015c4",
+  "type": "debug",
+  "z": "f6f2187d.f17ca8",
+  "name": "emqx_logs",
+  "active": true,
+  "tosidebar": true,
+  "console": false,
+  "tostatus": false,
+  "complete": "payload",
+  "targetType": "msg",
+  "statusVal": "",
+  "statusType": "auto",
+  "x": 430,
+  "y": 400,
+  "wires": []
+}

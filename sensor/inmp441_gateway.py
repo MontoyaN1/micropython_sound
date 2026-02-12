@@ -1,7 +1,9 @@
-"""Gateway ESP32 - Recibe dB via ESPNOW y envía datos via MQTT.
-Envía al topic: sensors/espnow/grouped_data
-Formato: {"id": "E1", "dB": 65.3}"""
+"""Gateway ESP32 - Recibe dB via ESPNOW y envía datos via MQTT en lotes pequeños.
+Envía lotes de 2-3 micros cuando tienen 2 muestras cada uno.
+Formato: {"sensors": [{"micro_id": "E1", "value": 65.3}], "timestamp": 1234567890}
+"""
 
+import gc
 import json
 import math
 import time
@@ -15,7 +17,7 @@ from umqtt.simple import MQTTClient
 from config import MQTT_BROKER, MQTT_PORT, WIFI_PASSWORD, WIFI_SSID
 
 # Configuración del gateway
-MICRO_ID = "E255"  # ID del gateway, E - ESP
+MICRO_ID = "E255"  # ID del gateway (sensor local)
 SCK_PIN = 14
 WS_PIN = 25
 SD_PIN = 34
@@ -23,13 +25,15 @@ SAMPLE_RATE = 16000
 
 # Configuración MQTT
 MQTT_TOPIC = "sensors/espnow/grouped_data"
-# Nota: Ya no usamos intervalo fijo, enviamos cuando tenemos 2 muestras por sensor
 MQTT_CLIENT_ID = "esp32_gateway_01"
 MQTT_KEEPALIVE = 30
 
 # LED integrado
 LED_PIN = 2
 
+# Contadores globales
+MESSAGE_COUNTER = 0
+BATCH_SIZE = 3  # Micros por lote MQTT
 
 # Inicializar I2S para micrófono local
 audio_in = I2S(
@@ -73,15 +77,15 @@ def conectar_wifi():
 
 def reinicializar_espnow():
     """Reinicializa completamente ESPNOW después de usar WiFi."""
-    print("Reinicializando ESPNOW completamente...")
+    print("Reinicializando ESPNOW...")
 
     # Crear nueva interfaz WiFi para ESPNOW
     sta = network.WLAN(network.STA_IF)
     sta.active(False)
-    time.sleep(0.1)
+    time.sleep(0.2)
     sta.active(True)
     sta.disconnect()
-    time.sleep(1.0)
+    time.sleep(0.5)
 
     # Crear nuevo objeto ESPNOW
     e = espnow.ESPNow()
@@ -93,71 +97,93 @@ def reinicializar_espnow():
     print(f"MAC: {mac_str}")
     print("ESPNOW activo - Listo para recibir")
 
-    # Pequeño delay para estabilizar conexión ESPNOW
-    time.sleep(0.5)
-
     return e, sta
 
 
-def enviar_datos_mqtt(datos_acumulados):
-    """Enviar datos acumulados via MQTT."""
-    if not datos_acumulados:
-        return
+def enviar_lote_mqtt(micros_completos, datos_micros):
+    """Enviar un lote de micros completos via MQTT."""
+    global MESSAGE_COUNTER
+
+    if not micros_completos:
+        print("No hay micros completos para enviar")
+        return False
 
     sta = None
     client = None
-    led = Pin(LED_PIN, Pin.OUT)
+    exitos = 0
 
     try:
         # 1. Conectar WiFi
         sta = conectar_wifi()
         if not sta:
-            return
+            print("✗ Falló conexión WiFi")
+            return False
 
-        # 2. Crear y conectar cliente MQTT
-        print(f"Conectando MQTT a {MQTT_BROKER}:{MQTT_PORT}...")
+        # 2. Conectar MQTT
         client = MQTTClient(
-            MQTT_CLIENT_ID, MQTT_BROKER, port=MQTT_PORT, keepalive=MQTT_KEEPALIVE
+            MQTT_CLIENT_ID,
+            MQTT_BROKER,
+            port=MQTT_PORT,
+            keepalive=MQTT_KEEPALIVE,
         )
         client.connect()
-        print(f"MQTT conectado. Topic: {MQTT_TOPIC}")
+        print(f"✓ MQTT conectado para lote de {len(micros_completos)} micros")
 
-        # 3. Enviar cada dato
-        mensajes_enviados = 0
-        for datos in datos_acumulados:
-            # Formato simplificado: solo id y dB (redondeado a 1 decimal)
-            datos_simplificados = {"id": datos["id"], "dB": round(datos["dB"], 1)}
-            mensaje_json = json.dumps(datos_simplificados)
+        timestamp = int(time.time())
+        micros_por_lote = min(BATCH_SIZE, len(micros_completos))
 
-            try:
-                client.publish(MQTT_TOPIC, mensaje_json)
-                mensajes_enviados += 1
-                print(f"MQTT ENVIADO: {mensaje_json}")
-                time.sleep(0.05)  # Pequeña pausa entre mensajes
-            except Exception as e:
-                print(f"Error enviando mensaje: {e}")
+        # Enviar en lotes pequeños
+        for i in range(0, len(micros_completos), micros_por_lote):
+            lote_micros = micros_completos[i : i + micros_por_lote]
 
-        # Parpadear LED dos veces para indicar envío MQTT
+            # Crear mensaje para este lote
+            MESSAGE_COUNTER += 1
+            mensaje = {
+                "message_id": f"esp32_{MESSAGE_COUNTER:06d}",
+                "timestamp": timestamp,
+                "sensors": [],
+            }
+
+            # Agregar datos de cada micro en el lote
+            for micro_id in lote_micros:
+                if micro_id in datos_micros and len(datos_micros[micro_id]) >= 2:
+                    # Tomar las 2 muestras más recientes
+                    muestras = datos_micros[micro_id][-2:]
+                    for j, dB_valor in enumerate(muestras):
+                        mensaje["sensors"].append(
+                            {
+                                "micro_id": micro_id,
+                                "value": round(dB_valor, 1),
+                                "sample": j + 1,
+                            }
+                        )
+
+            # Enviar lote
+            if mensaje["sensors"]:
+                json_msg = json.dumps(mensaje)
+                client.publish(MQTT_TOPIC, json_msg)
+                exitos += 1
+                print(
+                    f"✓ Lote enviado: {len(mensaje['sensors'])} muestras de {len(lote_micros)} micros"
+                )
+
+                # Pequeño delay entre lotes
+                if i + micros_por_lote < len(micros_completos):
+                    time.sleep(0.1)
+
+        # Feedback visual
         for _ in range(2):
             led.on()
             time.sleep(0.1)
             led.off()
             time.sleep(0.1)
 
-        print(f"Total enviados: {mensajes_enviados}/{len(datos_acumulados)}")
-
-        # 4. Dar tiempo para que se envíen todos los mensajes
-        time.sleep(0.5)
-
-        # 5. Desconectar MQTT
-        client.disconnect()
-        print("MQTT desconectado")
+        print(f"✓ Envío completo: {exitos} lotes enviados")
+        return exitos > 0
 
     except Exception as e:
-        print(f"Error MQTT: {e}")
-        import sys
-
-        sys.print_exception(e)
+        print(f"✗ Error MQTT: {e}")
+        return False
 
     finally:
         # Limpiar recursos
@@ -178,145 +204,121 @@ def enviar_datos_mqtt(datos_acumulados):
 
 def main():
     print("=" * 50)
-    print("GATEWAY ESP32 - ESPNOW + MQTT")
+    print("GATEWAY ESP32 - ENVÍO POR LOTES PEQUEÑOS")
     print(f"ID: {MICRO_ID}")
+    print(f"Lotes de {BATCH_SIZE} sensores")
     print("=" * 50)
 
-    # Inicializar ESPNOW usando función de reinicialización
-    e, sta = reinicializar_espnow()
+    # Inicializar ESPNOW
+    e, sta_espnow = reinicializar_espnow()
 
-    # Variables para procesamiento
+    # Variables de procesamiento de audio local
     suma_cuadrados = 0
-    muestras = 0
+    muestras_audio = 0
     ciclo = 0
 
-    # Sistema de generaciones
-    generacion_actual = 0
+    # Almacenamiento de datos por micro
+    # Estructura: {micro_id: [dB1, dB2, ...]} - máximo 4 muestras por micro
+    datos_micros = {}
+    MAX_MUESTRAS_POR_MICRO = 4  # Mantener solo últimas 4 muestras
 
-    # Acumuladores de datos por generación
-    # Estructura: {generacion: {sensor_id: [dB1, dB2, ...]}}
-    datos_por_generacion = {generacion_actual: {}}
+    # El gateway local siempre está presente
+    datos_micros[MICRO_ID] = []
+
+    # Contadores de estadísticas
     mensajes_recibidos = 0
-    dispositivos_vistos = set()
-    sensores_en_generacion = set()  # Sensores activos en la generación actual
+    envios_exitosos = 0
+    envios_fallidos = 0
+    micros_activos = set([MICRO_ID])
+    ultimo_estado = time.time()
+    ultimo_envio = time.time()
 
     print("\nIniciando...")
-    print("Sistema de generaciones activado")
-    print(f"Generación actual: {generacion_actual}")
-    print("Esperando 2 muestras de TODOS los sensores en esta generación...")
-    ultimo_estado = time.time()
+    print("Acumulando datos y enviando en lotes pequeños")
+    print("No se espera a todos los micros")
 
     try:
         while True:
-            # 1. Recibir mensajes ESPNOW
+            # 1. Recibir mensajes ESPNOW (no bloqueante)
             try:
-                host, msg = e.recv(0)  # Non-blocking
+                host, msg = e.recv(0)
                 if msg:
                     mensajes_recibidos += 1
                     mac_origen = bytes(host)
                     mac_origen_str = ":".join(f"{b:02x}" for b in mac_origen)
-                    dispositivos_vistos.add(mac_origen_str)
 
                     try:
-                        # Decodificar mensaje de forma robusta
+                        # Decodificar mensaje
                         try:
                             msg_str = msg.decode("utf-8")
-                        except UnicodeError:
-                            # Intentar decodificar ignorando errores
-                            msg_str = msg.decode("utf-8", errors="ignore")
-                            msg_str = msg_str.strip()
+                        except:
+                            # Si falla UTF-8, usar latin-1
+                            msg_str = msg.decode("latin-1")
+                        msg_str = msg_str.strip()
 
-                        # Procesar datos de sensores remotos
-                        # Formato esperado: "ID:dB" (ej: "E1:65.3")
+                        if not msg_str:
+                            continue
+
+                        # Procesar formato "ID:dB" o "ID:INICIO/FIN"
                         if ":" in msg_str:
                             partes = msg_str.split(":")
 
-                            # Mensajes de control: "ID:INICIO" o "ID:FIN"
-                            if len(partes) == 2 and (
-                                partes[1] == "INICIO" or partes[1] == "FIN"
-                            ):
-                                sensor_id = partes[0]
+                            if len(partes) == 2:
+                                micro_id = partes[0]
+
+                                # Mensajes de control
                                 if partes[1] == "INICIO":
                                     print(
-                                        f"Sensor conectado: {mac_origen_str} (ID: {sensor_id})"
+                                        f"Micro conectado: {micro_id} (MAC: {mac_origen_str})"
                                     )
+                                    micros_activos.add(micro_id)
+                                    continue
                                 elif partes[1] == "FIN":
                                     print(
-                                        f"Sensor desconectado: {mac_origen_str} (ID: {sensor_id})"
+                                        f"Micro desconectado: {micro_id} (MAC: {mac_origen_str})"
                                     )
-                                    # Si un sensor se desconecta, lo removemos de la generación actual
-                                    if sensor_id in sensores_en_generacion:
-                                        sensores_en_generacion.remove(sensor_id)
-                                        if (
-                                            sensor_id
-                                            in datos_por_generacion[generacion_actual]
-                                        ):
-                                            del datos_por_generacion[generacion_actual][
-                                                sensor_id
-                                            ]
-                                        print(
-                                            f"Sensor {sensor_id} removido de generación {generacion_actual}"
-                                        )
+                                    if micro_id in micros_activos:
+                                        micros_activos.remove(micro_id)
+                                    if micro_id in datos_micros:
+                                        del datos_micros[micro_id]
+                                    continue
 
-                            # Formato simple "ID:dB" (datos de medición)
-                            elif len(partes) == 2:
-                                sensor_id = partes[0]
+                                # Datos de medición
                                 try:
                                     dB_valor = float(partes[1])
 
-                                    # Verificar si el sensor ya está en la generación actual
-                                    if sensor_id not in sensores_en_generacion:
-                                        # Nuevo sensor - agregar a la generación actual
-                                        sensores_en_generacion.add(sensor_id)
-                                        datos_por_generacion[generacion_actual][
-                                            sensor_id
-                                        ] = []
-                                        print(
-                                            f"ESPNOW: Nuevo sensor {sensor_id} unido a generación {generacion_actual}"
-                                        )
+                                    # Asegurar que el micro está en el diccionario
+                                    if micro_id not in datos_micros:
+                                        datos_micros[micro_id] = []
+                                        print(f"Nuevo micro detectado: {micro_id}")
 
-                                    # Solo acumular si tenemos menos de 2 datos para este sensor en esta generación
+                                    # Agregar dato (mantener máximo MAX_MUESTRAS_POR_MICRO)
+                                    datos_micros[micro_id].append(dB_valor)
                                     if (
-                                        len(
-                                            datos_por_generacion[generacion_actual][
-                                                sensor_id
-                                            ]
-                                        )
-                                        < 2
+                                        len(datos_micros[micro_id])
+                                        > MAX_MUESTRAS_POR_MICRO
                                     ):
-                                        datos_por_generacion[generacion_actual][
-                                            sensor_id
-                                        ].append(dB_valor)
-                                        print(
-                                            f"ESPNOW: {sensor_id}:{dB_valor:.1f} dB (gen {generacion_actual}, dato {len(datos_por_generacion[generacion_actual][sensor_id])}/2)"
-                                        )
-                                    else:
-                                        print(
-                                            f"ESPNOW: {sensor_id}:{dB_valor:.1f} dB (ignorado, ya tiene 2 datos en gen {generacion_actual})"
-                                        )
-                                except ValueError:
+                                        datos_micros[micro_id] = datos_micros[micro_id][
+                                            -MAX_MUESTRAS_POR_MICRO:
+                                        ]
+
+                                    muestras_actuales = len(datos_micros[micro_id])
                                     print(
-                                        f"Valor no convertible a float: '{partes[1]}'"
+                                        f"ESPNOW: {micro_id}:{dB_valor:.1f} dB ({muestras_actuales}/{MAX_MUESTRAS_POR_MICRO})"
                                     )
-                            else:
-                                print(f"Formato desconocido: '{msg_str}'")
 
-                        # Mensajes de control ya manejados arriba
-                        # (INICIO y FIN se manejan en la sección de formato "ID:INICIO" y "ID:FIN")
-                        else:
-                            print(f"Mensaje no reconocido: '{msg_str}'")
-
+                                except ValueError:
+                                    print(f"Valor no numérico: '{partes[1]}'")
                     except Exception as e:
                         print(f"Error procesando mensaje: {e}")
 
             except Exception as recv_err:
                 # Ignorar timeouts normales
                 if "ETIMEDOUT" not in str(recv_err) and "ENODATA" not in str(recv_err):
-                    print(f"Error recepción ESPNOW: {recv_err}")
+                    pass
 
             # 2. Procesar audio local
             bytes_leidos = audio_in.readinto(samples)
-
             if bytes_leidos > 0:
                 # Calcular RMS
                 suma = 0
@@ -331,14 +333,14 @@ def main():
                 if count > 0:
                     rms = math.sqrt(suma / count)
                     suma_cuadrados += rms * rms
-                    muestras += 1
+                    muestras_audio += 1
 
             ciclo += 1
 
-            # 3. Calcular dB local cada 5 segundos
-            if ciclo >= 100 and muestras > 0:  # 100 ciclos * 0.05s = 5s
+            # 3. Calcular dB local cada 5 segundos (100 ciclos * 0.05s = 5s)
+            if ciclo >= 100 and muestras_audio > 0:
                 # Calcular dB
-                rms_prom = math.sqrt(suma_cuadrados / muestras)
+                rms_prom = math.sqrt(suma_cuadrados / muestras_audio)
 
                 if rms_prom >= 2:
                     voltaje = (rms_prom / 32767) * 3.3
@@ -353,178 +355,159 @@ def main():
                 else:
                     dB = 0.0
 
-                # Redondear a 1 decimal como el sender
                 dB = round(dB, 1)
 
-                # Acumular datos locales (gateway siempre está en la generación actual)
-                if MICRO_ID not in datos_por_generacion[generacion_actual]:
-                    datos_por_generacion[generacion_actual][MICRO_ID] = []
-                    sensores_en_generacion.add(MICRO_ID)
+                # Agregar dato local del gateway
+                datos_micros[MICRO_ID].append(dB)
+                if len(datos_micros[MICRO_ID]) > MAX_MUESTRAS_POR_MICRO:
+                    datos_micros[MICRO_ID] = datos_micros[MICRO_ID][
+                        -MAX_MUESTRAS_POR_MICRO:
+                    ]
 
-                # Solo acumular si tenemos menos de 2 datos para el gateway local en esta generación
-                if len(datos_por_generacion[generacion_actual][MICRO_ID]) < 2:
-                    datos_por_generacion[generacion_actual][MICRO_ID].append(dB)
-                    print(
-                        f"LOCAL: {dB:.1f} dB (gen {generacion_actual}, dato {len(datos_por_generacion[generacion_actual][MICRO_ID])}/2)"
-                    )
-                    # Parpadear LED una vez para indicar captura local
-                    led.on()
-                    time.sleep(0.1)
-                    led.off()
-                else:
-                    print(
-                        f"LOCAL: {dB:.1f} dB (ignorado, ya tiene 2 datos en gen {generacion_actual})"
-                    )
+                muestras_actuales = len(datos_micros[MICRO_ID])
+                print(
+                    f"LOCAL: {dB:.1f} dB ({muestras_actuales}/{MAX_MUESTRAS_POR_MICRO})"
+                )
+
+                # LED feedback para captura local
+                led.on()
+                time.sleep(0.1)
+                led.off()
 
                 # Reiniciar contadores
                 suma_cuadrados = 0
-                muestras = 0
+                muestras_audio = 0
                 ciclo = 0
 
-            # 4. Verificar si tenemos 2 muestras para TODOS los sensores en la generación actual
-            # Solo enviamos si TODOS los sensores en esta generación tienen al menos 2 muestras
-            enviar_ahora = False
-            sensores_completos = []
-            sensores_incompletos = []
-
-            if datos_por_generacion[
-                generacion_actual
-            ]:  # Solo verificar si hay sensores en esta generación
-                enviar_ahora = True
-                for sensor_id, mediciones in datos_por_generacion[
-                    generacion_actual
-                ].items():
-                    if len(mediciones) >= 2:
-                        sensores_completos.append(sensor_id)
-                    else:
-                        sensores_incompletos.append(sensor_id)
-                        enviar_ahora = False
-
-            if enviar_ahora and datos_por_generacion[generacion_actual]:
-                # Convertir datos de la generación actual a lista plana para enviar
-                datos_a_enviar = []
-                for sensor_id, mediciones in datos_por_generacion[
-                    generacion_actual
-                ].items():
-                    # Solo enviar las primeras 2 mediciones de cada sensor
-                    for i, dB_valor in enumerate(mediciones[:2]):
-                        datos_a_enviar.append({"id": sensor_id, "dB": dB_valor})
-
-                if datos_a_enviar:
-                    print(f"\n✓ GENERACIÓN {generacion_actual} COMPLETA")
-                    print(f"Sensores en esta generación: {sensores_completos}")
-                    print(
-                        f"Total datos a enviar: {len(datos_a_enviar)} (2 por cada sensor)"
-                    )
-                    print(f"Topic: {MQTT_TOPIC}")
-                    enviar_datos_mqtt(datos_a_enviar)
-
-                # Crear nueva generación para nuevos sensores
-                generacion_actual += 1
-                datos_por_generacion[generacion_actual] = {}
-                sensores_en_generacion.clear()
-
-                # El gateway local siempre está en cada nueva generación
-                datos_por_generacion[generacion_actual][MICRO_ID] = []
-                sensores_en_generacion.add(MICRO_ID)
-
-                print(f"\n🔄 Nueva generación iniciada: {generacion_actual}")
-                print(
-                    "Esperando 2 muestras de TODOS los sensores en esta nueva generación..."
-                )
-
-                # Reinicializar ESPNOW completamente después de usar WiFi
-                e, sta = reinicializar_espnow()
-                # Pequeño delay para dar tiempo a que sensores se reconecten
-                time.sleep(1.0)
-
-            # Mostrar estado periódicamente cada 30 segundos
+            # 4. Verificar si hay sensores completos para enviar
             tiempo_actual = time.time()
+
+            # Enviar si:
+            # 1. Han pasado al menos 10 segundos desde el último envío
+            # 2. Y tenemos al menos BATCH_SIZE micros con 2+ muestras
+            if tiempo_actual - ultimo_envio >= 10:
+                micros_completos = []
+                for micro_id in list(datos_micros.keys()):
+                    if len(datos_micros.get(micro_id, [])) >= 2:
+                        micros_completos.append(micro_id)
+
+                if len(micros_completos) >= BATCH_SIZE:
+                    print(
+                        f"\n📦 Preparando lote de {len(micros_completos)} micros completos..."
+                    )
+
+                    if enviar_lote_mqtt(micros_completos, datos_micros):
+                        envios_exitosos += 1
+                        ultimo_envio = tiempo_actual
+
+                        # Limpiar datos de micros enviados (mantener solo 1 muestra por si acaso)
+                        for micro_id in micros_completos:
+                            if (
+                                micro_id in datos_micros
+                                and len(datos_micros[micro_id]) > 0
+                            ):
+                                datos_micros[micro_id] = datos_micros[micro_id][-1:]
+
+                        # Reinicializar ESPNOW después de MQTT
+                        e, sta_espnow = reinicializar_espnow()
+                        print("ESPNOW reinicializado después de envío MQTT")
+
+                        # Limpiar memoria
+                        gc.collect()
+                        print(f"Memoria libre: {gc.mem_free()} bytes")
+                    else:
+                        envios_fallidos += 1
+
+            # 5. Mostrar estado periódicamente cada 30 segundos
             if tiempo_actual - ultimo_estado >= 30:
-                print(f"\n[Estado] Generación actual: {generacion_actual}")
-                print(
-                    f"Sensores en generación {generacion_actual}: {len(datos_por_generacion[generacion_actual])}"
-                )
-                if datos_por_generacion[generacion_actual]:
-                    for sensor_id, mediciones in datos_por_generacion[
-                        generacion_actual
-                    ].items():
-                        print(f"  {sensor_id}: {len(mediciones)}/2 muestras")
+                print(f"\n[Estado]")
+                print(f"Micros activos: {len(micros_activos)}")
+                print(f"Datos en memoria: {len(datos_micros)} micros")
+                print(f"Memoria libre: {gc.mem_free()} bytes")
+
+                # Mostrar micros con datos
+                micros_con_datos = 0
+                micros_completos_actual = 0
+                for micro_id in micros_activos:
+                    muestras_micro = len(datos_micros.get(micro_id, []))
+                    if muestras_micro > 0:
+                        micros_con_datos += 1
+                    if muestras_micro >= 2:
+                        micros_completos_actual += 1
+                    if muestras_micro > 0:
+                        print(
+                            f"  {micro_id}: {muestras_micro}/{MAX_MUESTRAS_POR_MICRO}"
+                        )
+
+                print(f"Micros con datos: {micros_con_datos}/{len(micros_activos)}")
+                print(f"Micros completos (2+): {micros_completos_actual}")
+
+                total_envios = envios_exitosos + envios_fallidos
+                if total_envios > 0:
+                    tasa = envios_exitosos / total_envios * 100
+                    print(
+                        f"MQTT: {envios_exitosos} éxitos, {envios_fallidos} fallos ({tasa:.1f}%)"
+                    )
                 else:
-                    print("  No hay sensores en esta generación")
+                    print(f"MQTT: Sin envíos aún")
+
+                # Limpiar memoria periódicamente
+                gc.collect()
+                print(f"Memoria después de GC: {gc.mem_free()} bytes")
+
                 ultimo_estado = tiempo_actual
 
-            time.sleep(0.05)
+            time.sleep(0.05)  # 20 Hz loop
 
     except KeyboardInterrupt:
         print("\nDeteniendo gateway...")
 
-        # Verificar si tenemos datos completos en la generación actual para enviar
-        enviar_final = False
-        sensores_completos_final = []
-        sensores_incompletos_final = []
+        # Intentar enviar datos pendientes
+        print("Verificando datos pendientes...")
+        micros_completos_final = []
+        for micro_id in list(datos_micros.keys()):
+            if len(datos_micros.get(micro_id, [])) >= 2:
+                micros_completos_final.append(micro_id)
 
-        if datos_por_generacion[generacion_actual]:
-            enviar_final = True
-            for sensor_id, mediciones in datos_por_generacion[
-                generacion_actual
-            ].items():
-                if len(mediciones) >= 2:
-                    sensores_completos_final.append(sensor_id)
-                else:
-                    sensores_incompletos_final.append(sensor_id)
-                    enviar_final = False
+        if micros_completos_final:
+            print(f"Enviando datos finales de {len(micros_completos_final)} micros...")
+            if enviar_lote_mqtt(micros_completos_final, datos_micros):
+                envios_exitosos += 1
+            else:
+                envios_fallidos += 1
 
-        # Solo enviar si TODOS los sensores en la generación actual tienen 2 muestras
-        if enviar_final and datos_por_generacion[generacion_actual]:
-            # Convertir datos de la generación actual a lista plana para enviar
-            datos_a_enviar = []
-            for sensor_id, mediciones in datos_por_generacion[
-                generacion_actual
-            ].items():
-                # Solo enviar las primeras 2 mediciones de cada sensor
-                for i, dB_valor in enumerate(mediciones[:2]):
-                    datos_a_enviar.append({"id": sensor_id, "dB": dB_valor})
+        # Mostrar estadísticas finales
+        print("\n" + "=" * 50)
+        print("ESTADÍSTICAS FINALES")
+        print("=" * 50)
 
-            if datos_a_enviar:
-                print(
-                    f"Enviando {len(datos_a_enviar)} datos finales de generación {generacion_actual}..."
-                )
-                print(f"Sensores completos: {sensores_completos_final}")
-                enviar_datos_mqtt(datos_a_enviar)
-                # Reinicializar ESPNOW después del envío final
-                e, sta = reinicializar_espnow()
-                # Pequeño delay para dar tiempo a que sensores se reconecten
-                time.sleep(1.0)
-        else:
-            print(
-                f"No se envían datos finales: generación {generacion_actual} incompleta"
-            )
-            if datos_por_generacion[generacion_actual]:
-                print("Estado actual:")
-                for sensor_id, mediciones in datos_por_generacion[
-                    generacion_actual
-                ].items():
-                    print(f"  {sensor_id}: {len(mediciones)}/2 muestras")
-                if sensores_incompletos_final:
-                    print(f"Sensores incompletos: {sensores_incompletos_final}")
+        print(f"\n📡 ESPNOW:")
+        print(f"  • Mensajes recibidos: {mensajes_recibidos}")
+        print(f"  • Micros activos: {len(micros_activos)}")
 
-        # Mostrar estadísticas
-        print("\nEstadísticas finales:")
-        print(f"  Mensajes ESPNOW recibidos: {mensajes_recibidos}")
-        print(f"  Dispositivos detectados: {len(dispositivos_vistos)}")
-        for dispositivo in dispositivos_vistos:
-            print(f"    • {dispositivo}")
+        print(f"\n📤 MQTT:")
+        print(f"  • Envíos exitosos: {envios_exitosos}")
+        print(f"  • Envíos fallidos: {envios_fallidos}")
+        total = envios_exitosos + envios_fallidos
+        if total > 0:
+            print(f"  • Tasa éxito: {envios_exitosos / total * 100:.1f}%")
+
+        print(f"\n⚙️  Sistema:")
+        print(f"  • Gateway ID: {MICRO_ID}")
+        print(f"  • Memoria libre final: {gc.mem_free()} bytes")
 
     except Exception as e:
-        print(f"\nError: {e}")
+        print(f"\nError crítico: {e}")
+        import sys
+
+        sys.print_exception(e)
 
     finally:
         # Limpiar recursos
         print("\nLimpiando recursos...")
         audio_in.deinit()
         e.active(False)
-        sta.active(False)
+        sta_espnow.active(False)
         print("Recursos liberados")
         print("=" * 50)
 
