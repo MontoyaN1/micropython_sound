@@ -6,7 +6,7 @@
   "method": "POST",
   "ret": "txt",
   "paytoqs": "ignore",
-  "url": "http://influxdb:8086/api/v2/write?org=senya&bucket=sensores&precision=ns",
+  "url": "http://influxdb:8086/api/v2/write?org=TU_ORGANIZACION&bucket=TU_BUCKET&precision=ns",
   "tls": "",
   "persist": false,
   "proxy": "",
@@ -18,7 +18,7 @@
       "keyType": "Authorization",
       "keyValue": "",
       "valueType": "other",
-      "valueValue": "Token ECnmZ2FHD-N8iqf-Iit7SpRGI_9Q7sLgPD0iLpIc0ozbEsuVtqZJ_l3gfyS5ElU0uvB9JjXIkgDrUftStfzwAg=="
+      "valueValue": "Token TU_TOKEN_INFLUXDB_AQUI"
     },
     {
       "keyType": "Content-Type",

@@ -210,3 +210,9 @@ __marimo__/
 sensor/config.py
 
 !config.example.py
+
+# Node-RED configuration (sanitized - safe to share)
+# node_red/  # Removed from gitignore - now contains sanitized files for academic sharing
+
+# Environment variables (contains sensitive data)
+.env

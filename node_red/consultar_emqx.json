@@ -20,7 +20,7 @@
     "id": "0362c57418616d0b",
     "type": "mqtt-broker",
     "name": "EMQX",
-    "broker": "http://213.199.37.1/",
+    "broker": "TU_BROKER_MQTT_AQUI",
     "port": 1883,
     "clientid": "nodered_tesis",
     "autoConnect": true,
