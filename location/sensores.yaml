@@ -1,0 +1,13 @@
+microcontrollers:
+  micro_E1:
+    location: [4.609710, -74.081749]
+  micro_E2:
+    location: [4.599710, -74.091749]
+  micro_E3:
+    location: [4.619710, -74.071749]
+  micro_E4:
+    location: [4.629710, -74.061749]
+  micro_E5:
+    location: [4.639710, -74.051749]
+  micro_E255:
+    location: [4.649710, -74.041749]
