@@ -18,7 +18,8 @@ Flujo completo de Node-RED que incluye:
 ### Archivos Individuales
 - `consultar_emqx.json`: Configuración del nodo MQTT Input
 - `http_request.json`: Configuración del nodo HTTP Request para InfluxDB
-- `procesamiento.json`: Función JavaScript para procesar datos
+- `procesamiento.json`: Función JavaScript para procesar datos (nodo Node-RED)
+- `procesamiento.js`: Módulo JavaScript independiente con la función de procesamiento
 - `error_catch.json`: Configuración de manejo de errores
 - `logs_emqx.json` y `logs_http.json`: Nodos de debug
 
@@ -59,7 +60,13 @@ Asegúrate de que tus dispositivos MicroPython publiquen en este tópico o modif
 
 1. **MQTT Input**: Recibe datos del broker MQTT
 2. **Debug (emqx_logs)**: Muestra los datos recibidos por MQTT
-3. **Función "Procesar datos"**: Convierte JSON a formato InfluxDB Line Protocol
+### Función "Procesar datos": Convierte JSON a formato InfluxDB Line Protocol
+- Valida la estructura de datos con validación mejorada (optional chaining)
+- Escapa caracteres especiales para InfluxDB (incluyendo espacios, comas y signos igual)
+- Convierte cada sensor a formato Line Protocol simplificado
+- NO incluye timestamp (InfluxDB usa la hora del servidor)
+- NO incluye el campo `sample` como tag
+- Agrega metadata para debugging
 4. **HTTP Request**: Envía datos a InfluxDB
 5. **Debug (logs_http)**: Muestra la respuesta de InfluxDB
 6. **Catch Node**: Captura y muestra errores
@@ -69,15 +76,52 @@ Asegúrate de que tus dispositivos MicroPython publiquen en este tópico o modif
 Los dispositivos MicroPython deben enviar datos en el siguiente formato JSON:
 ```json
 {
-  "micro_id": "ID_DEL_MICROCONTROLADOR",
+  "message_id": "esp32_000657",
+  "timestamp": 3433,
   "sensors": [
-    {
-      "sensor_id": "ID_DEL_SENSOR",
-      "value": 123.45
-    }
+    {"micro_id": "E3", "value": 34.3, "sample": 1},
+    {"micro_id": "E3", "value": 36.6, "sample": 2},
+    {"micro_id": "E4", "value": 35.9, "sample": 1},
+    {"micro_id": "E4", "value": 36.4, "sample": 2},
+    {"micro_id": "E5", "value": 36.3, "sample": 1},
+    {"micro_id": "E5", "value": 37.4, "sample": 2}
   ]
 }
 ```
+
+**Campos:**
+- `message_id`: Identificador único del mensaje (string)
+- `timestamp`: Marca de tiempo en milisegundos (opcional, number)
+- `sensors`: Array de lecturas de sensores
+  - `micro_id`: Identificador del microcontrolador (string)
+  - `value`: Valor de la lectura (number)
+  - `sample`: Número de muestra (opcional, number, default: 0) - Nota: este campo ya no se incluye en el formato Line Protocol
+
+## Archivo `procesamiento.js`
+
+El archivo `procesamiento.js` contiene la función de procesamiento como un módulo JavaScript independiente. Esto permite:
+
+1. **Reutilización**: Usar la misma función en diferentes proyectos
+2. **Testing**: Probar la función fuera de Node-RED
+3. **Mantenimiento**: Gestionar la lógica de procesamiento separadamente
+
+### Uso del módulo:
+```javascript
+// En Node.js o entorno JavaScript
+const procesarDatosInfluxDB = require('./procesamiento.js');
+const resultado = procesarDatosInfluxDB({ payload: datos });
+
+// En Node-RED function node (código actualizado en procesamiento.json y flow.json)
+```
+
+### Características:
+- Validación mejorada de datos de entrada con optional chaining (`?.`)
+- Escape completo de caracteres especiales para InfluxDB (espacios, comas y signos igual)
+- Manejo robusto de errores y warnings
+- Metadata para debugging
+- Formato simplificado sin timestamp (InfluxDB usa hora del servidor)
+- Eliminación del campo `sample` como tag para simplificar la estructura
+- Retorna array de líneas unidas con saltos de línea
 
 ## Instalación en Node-RED
 

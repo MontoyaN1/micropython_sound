@@ -1,0 +1,59 @@
+{
+  "imageUrl": "/plano.png",
+  "imageDimensions": {
+    "width": 202,
+    "height": 562
+  },
+  "realDimensions": {
+    "width": 5,
+    "height": 14,
+    "unit": "meters"
+  },
+  "bounds": [
+    [0, 0],
+    [14, 5]
+  ],
+  "sensors": {
+    "E1": {
+      "position": [3, 1.5],
+      "room": "Zona - E1",
+      "description": "Micro E1"
+    },
+    "E2": {
+      "position": [2, 3.5],
+      "room": "Zona - E2",
+      "description": "Micro E2"
+    },
+    "E3": {
+      "position": [7, 1.5],
+      "room": "Zona - E3",
+      "description": "Micro E3"
+    },
+    "E4": {
+      "position": [10, 1.5],
+      "room": "Zona - E4",
+      "description": "Micro E4"
+    },
+    "E5": {
+      "position": [10, 3.5],
+      "room": "Zona - E5",
+      "description": "Micro E5"
+    },
+    "E255": {
+      "position": [5, 3.5],
+      "room": "Zona - E255",
+      "description": "Gateway E255"
+    }
+  },
+  "grid": {
+    "enabled": true,
+    "cellSize": 1,
+    "color": "rgba(255, 255, 255, 0.2)"
+  },
+  "mapOptions": {
+    "crs": "Simple",
+    "minZoom": -3,
+    "maxZoom": 5,
+    "zoomSnap": 0.5
+  }
+}

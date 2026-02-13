@@ -158,3 +158,38 @@ Este proyecto es parte de una tesis universitaria. Consultar `LICENSE` para deta
 ## Contacto
 
 Para preguntas o soporte, contactar al autor del proyecto.
+
+## Migración en Curso
+
+Actualmente se está migrando el sistema a una arquitectura moderna con **FastAPI (backend)** y **React (frontend)** para mejorar el rendimiento en tiempo real.
+
+### Nueva arquitectura
+- **Backend**: FastAPI con WebSocket y suscripción MQTT directa a EMQX
+- **Frontend**: React con Leaflet para mapas interactivos
+- **Cache**: DragonflyDB para consultas frecuentes
+- **Dashboard en tiempo real**: Actualizaciones de baja latencia vía WebSocket
+
+### Plan de migración
+Ver archivo [PLAN_MIGRACION.md](PLAN_MIGRACION.md) para detalles.
+
+### Estado actual
+- **Fase 1 (Backend FastAPI)**: Implementación en progreso (código en `/backend`)
+- **Fase 2 (Node-RED)**: Mantener flujo existente
+- **Fase 3 (Frontend React)**: Por implementar
+- **Fase 4 (Migración gradual)**: Pendiente
+- **Fase 5 (Retirar Dash)**: Pendiente
+
+### Ejecutar nueva arquitectura
+```bash
+# Levantar backend y cache
+docker-compose up -d backend cache
+
+# Acceder a API
+curl http://localhost:8000
+curl http://localhost:8000/health
+
+# WebSocket
+ws://localhost:8000/ws/realtime
+```
+
+La aplicación Dash original sigue disponible en puerto 8050 durante la migración.
