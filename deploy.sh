@@ -160,12 +160,18 @@ start_services() {
     local compose_file="$1"
     local env_file="$2"
     local services="$3"
+    local environment="$4"
 
     print_header "Iniciando servicios"
 
     if [ -z "$services" ]; then
-        services="backend frontend cache"
-        print_info "Iniciando servicios principales: $services"
+        if [ "$environment" = "prod" ]; then
+            services="nginx backend frontend cache"
+            print_info "Iniciando servicios de producción: $services"
+        else
+            services="backend frontend cache"
+            print_info "Iniciando servicios principales: $services"
+        fi
     fi
 
     if [ -n "$env_file" ]; then
@@ -200,18 +206,27 @@ stop_services() {
 restart_services() {
     local compose_file="$1"
     local env_file="$2"
+    local environment="$3"
     print_header "Reiniciando servicios"
 
+    # Determinar qué servicios reiniciar
+    local services=""
+    if [ "$environment" = "prod" ]; then
+        services="nginx backend frontend cache"
+    else
+        services="backend frontend cache"
+    fi
+
     if [ -n "$env_file" ]; then
-        if docker-compose -f "$compose_file" --env-file "$env_file" restart; then
-            print_success "Servicios reiniciados"
+        if docker-compose -f "$compose_file" --env-file "$env_file" restart $services; then
+            print_success "Servicios reiniciados: $services"
         else
             print_error "Error reiniciando servicios"
             exit 1
         fi
     else
-        if docker-compose -f "$compose_file" restart; then
-            print_success "Servicios reiniciados"
+        if docker-compose -f "$compose_file" restart $services; then
+            print_success "Servicios reiniciados: $services"
         else
             print_error "Error reiniciando servicios"
             exit 1
@@ -235,6 +250,15 @@ show_status() {
 
     # Verificar endpoints
     echo -e "\n${BLUE}Verificando endpoints:${NC}"
+
+    # Nginx (si está configurado)
+    if [ "$ENVIRONMENT" = "prod" ]; then
+        if curl -s -f http://localhost/health > /dev/null; then
+            print_success "Nginx (http://localhost) - ONLINE"
+        else
+            print_warning "Nginx (http://localhost) - OFFLINE"
+        fi
+    fi
 
     # Backend
     if curl -s -f http://localhost:18081/health > /dev/null; then
@@ -332,13 +356,24 @@ cleanup() {
 update_system() {
     local compose_file="$1"
     local env_file="$2"
+    local environment="$3"
     print_header "Actualizando sistema"
+
+    # Determinar qué servicios actualizar
+    local services=""
+    if [ "$environment" = "prod" ]; then
+        services="nginx backend frontend cache"
+        print_info "Actualizando servicios de producción: $services"
+    else
+        services="backend frontend cache"
+        print_info "Actualizando servicios: $services"
+    fi
 
     print_info "Reconstruyendo servicios..."
     if [ -n "$env_file" ]; then
-        docker-compose -f "$compose_file" --env-file "$env_file" up -d --build
+        docker-compose -f "$compose_file" --env-file "$env_file" up -d --build $services
     else
-        docker-compose -f "$compose_file" up -d --build
+        docker-compose -f "$compose_file" up -d --build $services
     fi
 
     print_success "Sistema actualizado"
@@ -407,21 +442,35 @@ Entornos disponibles:
 Nota: Ambos entornos usan el mismo archivo .env (compatible con EasyPanel)
 
 Servicios disponibles:
-  - backend    (FastAPI + WebSocket + MQTT)
-  - frontend   (React + Leaflet)
-  - cache      (DragonflyDB/Redis)
+  - nginx     (Reverse Proxy - solo en producción)
+  - backend   (FastAPI + WebSocket + MQTT)
+  - frontend  (React + Leaflet)
+  - cache     (DragonflyDB)
 
 Ejemplos:
   ./deploy.sh start          # Iniciar desarrollo
-  ./deploy.sh start prod     # Iniciar producción
+  ./deploy.sh start prod     # Iniciar producción (con nginx)
   ./deploy.sh logs backend   # Ver logs del backend
   ./deploy.sh status prod    # Ver estado de producción
   ./deploy.sh cleanup        # Limpiar recursos Docker
 
 Accesos después del despliegue:
-  Frontend React:    http://localhost:13001
-  Backend API:       http://localhost:18081
-  WebSocket:         ws://localhost:18081/ws/realtime
+  Desarrollo local:
+    Frontend React:    http://localhost:13001
+    Backend API:       http://localhost:18081
+    WebSocket:         ws://localhost:18081/ws/realtime
+    Nginx (proxy):     http://localhost
+
+  Producción (con nginx):
+    Aplicación completa: http://localhost
+    API:                 http://localhost/api
+    WebSocket:           ws://localhost/ws/realtime
+    Nginx (proxy):     http://localhost
+
+  Producción (con nginx):
+    Aplicación completa: http://localhost
+    API:                 http://localhost/api
+    WebSocket:           ws://localhost/ws/realtime
 
 EOF
 }
@@ -433,7 +482,7 @@ case "${1:-help}" in
         check_environment "$ENV_FILE"
         check_config_files
         build_images "$COMPOSE_FILE"
-        start_services "$COMPOSE_FILE" "$ENV_FILE" "$3"
+        start_services "$COMPOSE_FILE" "$ENV_FILE" "$3" "$ENVIRONMENT"
         sleep 5
         show_status "$COMPOSE_FILE" "$ENVIRONMENT"
         ;;
@@ -444,7 +493,7 @@ case "${1:-help}" in
     restart)
         check_dependencies
         check_environment "$ENV_FILE"
-        restart_services "$COMPOSE_FILE" "$ENV_FILE"
+        restart_services "$COMPOSE_FILE" "$ENV_FILE" "$ENVIRONMENT"
         sleep 3
         show_status "$COMPOSE_FILE" "$ENVIRONMENT"
         ;;
@@ -464,7 +513,7 @@ case "${1:-help}" in
     update)
         check_dependencies
         check_environment "$ENV_FILE"
-        update_system "$COMPOSE_FILE" "$ENV_FILE"
+        update_system "$COMPOSE_FILE" "$ENV_FILE" "$ENVIRONMENT"
         ;;
     backup)
         backup_config "$COMPOSE_FILE" "$ENV_FILE"
