@@ -128,3 +128,6 @@ Asegurarse de que las variables de entorno estén definidas (copiar de `.env` de
 - El backend **no almacena datos**; InfluxDB se encarga del almacenamiento histórico.
 - Los cálculos de IDW y epicentro se realizan cada 10 segundos (configurable en `app/services/data_service.py`).
 - El cache DragonflyDB almacena consultas frecuentes para mejorar rendimiento.
+
+---
+*Última actualización: Febrero 2026*

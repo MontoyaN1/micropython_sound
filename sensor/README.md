@@ -281,4 +281,4 @@ MQTT_PASSWORD = "contraseña_segura"
 - [Home Assistant Community](https://community.home-assistant.io/)
 
 ---
-*Última actualización: Enero 2024*
+*Última actualización: Febrero 2026*

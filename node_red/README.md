@@ -187,3 +187,6 @@ process.env.MQTT_BROKER = "http://localhost:1883"
 ## Licencia
 
 Este flujo de Node-RED es parte del proyecto de tesis de monitoreo de sonido con MicroPython.
+
+---
+*Última actualización: Febrero 2026*

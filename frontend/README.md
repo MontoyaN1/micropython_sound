@@ -178,3 +178,6 @@ npm run build
 - Los datos históricos se cachean en el backend (DragonflyDB)
 - El mapa usa OpenStreetMap como base (gratuito)
 - Los heatmaps se generan en el backend y se visualizan en el frontend
+
+---
+*Última actualización: Febrero 2026*

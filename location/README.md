@@ -256,4 +256,4 @@ Para transicionar de coordenadas relativas a GPS:
 
 ---
 
-*Nota: Este archivo es esencial para la correcta visualización espacial de los datos. Cualquier cambio requiere reinicio del backend para que surta efecto.*
+*Nota: Este archivo es esencial para la correcta visualización espacial de los datos. Cualquier cambio requiere reinicio del backend para que surta efecto. Ultimo cambio: Febrero 2026*
