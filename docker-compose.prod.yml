@@ -5,7 +5,7 @@ services:
     container_name: monitoreo-nginx-prod
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "8082:80"
       - "443:443" # Para HTTPS si se configura
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro

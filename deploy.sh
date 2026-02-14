@@ -253,10 +253,10 @@ show_status() {
 
     # Nginx (si está configurado)
     if [ "$ENVIRONMENT" = "prod" ]; then
-        if curl -s -f http://localhost/health > /dev/null; then
-            print_success "Nginx (http://localhost) - ONLINE"
+        if curl -s -f http://localhost:8082/health > /dev/null; then
+            print_success "Nginx (http://localhost:8082) - ONLINE"
         else
-            print_warning "Nginx (http://localhost) - OFFLINE"
+            print_warning "Nginx (http://localhost:8082) - OFFLINE"
         fi
     fi
 
@@ -462,15 +462,9 @@ Accesos después del despliegue:
     Nginx (proxy):     http://localhost
 
   Producción (con nginx):
-    Aplicación completa: http://localhost
-    API:                 http://localhost/api
-    WebSocket:           ws://localhost/ws/realtime
-    Nginx (proxy):     http://localhost
-
-  Producción (con nginx):
-    Aplicación completa: http://localhost
-    API:                 http://localhost/api
-    WebSocket:           ws://localhost/ws/realtime
+    Aplicación completa: http://localhost:8082
+    API:                 http://localhost:8082/api
+    WebSocket:           ws://localhost:8082/ws/realtime
 
 EOF
 }
