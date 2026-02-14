@@ -237,17 +237,17 @@ show_status() {
     echo -e "\n${BLUE}Verificando endpoints:${NC}"
 
     # Backend
-    if curl -s -f http://localhost:8000/health > /dev/null; then
-        print_success "Backend (http://localhost:8000) - ONLINE"
+    if curl -s -f http://localhost:18081/health > /dev/null; then
+        print_success "Backend (http://localhost:18081) - ONLINE"
     else
-        print_error "Backend (http://localhost:8000) - OFFLINE"
+        print_error "Backend (http://localhost:18081) - OFFLINE"
     fi
 
     # Frontend
-    if curl -s -f http://localhost:3000 > /dev/null; then
-        print_success "Frontend (http://localhost:3000) - ONLINE"
+    if curl -s -f http://localhost:13001 > /dev/null; then
+        print_success "Frontend (http://localhost:13001) - ONLINE"
     else
-        print_error "Frontend (http://localhost:3000) - OFFLINE"
+        print_error "Frontend (http://localhost:13001) - OFFLINE"
     fi
 
     # Cache - Determinar nombre del contenedor según entorno
@@ -256,7 +256,17 @@ show_status() {
         cache_container_name="monitoreo-cache-prod"
     else
         # En desarrollo, usar el nombre por defecto de docker-compose
-        cache_container_name="micropython_sound-cache-1"
+        # Obtener el nombre real del contenedor cache
+        cache_container_name=$(docker-compose -f "$compose_file" ps -q cache 2>/dev/null | head -1)
+        if [ -z "$cache_container_name" ]; then
+            cache_container_name="micropython_sound-cache-1"
+        else
+            # Obtener el nombre completo del contenedor
+            cache_container_name=$(docker inspect --format='{{.Name}}' "$cache_container_name" 2>/dev/null | sed 's/^\///')
+            if [ -z "$cache_container_name" ]; then
+                cache_container_name="micropython_sound-cache-1"
+            fi
+        fi
     fi
 
     # Verificar cache usando redis-cli desde fuera del contenedor primero
@@ -409,9 +419,9 @@ Ejemplos:
   ./deploy.sh cleanup        # Limpiar recursos Docker
 
 Accesos después del despliegue:
-  Frontend React:    http://localhost:3000
-  Backend API:       http://localhost:8000
-  WebSocket:         ws://localhost:8000/ws/realtime
+  Frontend React:    http://localhost:13001
+  Backend API:       http://localhost:18081
+  WebSocket:         ws://localhost:18081/ws/realtime
 
 EOF
 }

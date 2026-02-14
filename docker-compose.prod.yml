@@ -7,7 +7,7 @@ services:
     container_name: monitoreo-backend-prod
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "18081:8000"
     environment:
       # InfluxDB (variables esenciales)
       - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
@@ -46,13 +46,15 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile.production
+      args:
+        - VITE_API_URL=http://localhost:18081
+
     container_name: monitoreo-frontend-prod
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "13001:3000"
     environment:
       - NODE_ENV=production
-      - VITE_API_URL=${VITE_API_URL}
     deploy:
       resources:
         limits:

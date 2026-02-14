@@ -7,8 +7,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Build outputs
-dist/
+# Build outputs (dist/ se necesita para la construcción en Docker)
 build/
 
 # Desarrollo
@@ -74,7 +73,7 @@ jspm_packages/
 
 # Gatsby files
 .cache/
-public
+# public - Mantenido para permitir archivos estáticos
 
 # VuePress build output
 .vuepress/dist
