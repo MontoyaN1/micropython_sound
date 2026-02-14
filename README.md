@@ -593,17 +593,13 @@ Proyecto de Tesis de Grado. Universidad [Nombre de la Universidad].
 ## Contacto y Soporte
 
 ### Autor
-[Nombre del Autor] - [Correo institucional]
+Juan Pablo Montoya Valencia - juanpablomontoyajpmv@gmail.com
 
 ### Supervisión
-[Nombre del Director] - [Departamento/Área]
-
+Anderson Páez Chanagá 
 ### Repositorio
-https://github.com/[usuario]/micropython_sound
-
-### Reportar Problemas
-Issues en el repositorio GitHub o contacto directo con el autor.
+https://github.com/MontoyaN1/micropython_sound.git
 
 ---
 
-*Este proyecto fue desarrollado como parte de los requisitos para la obtención del título de [Título Académico] en [Nombre de la Universidad].*
+*Este proyecto fue desarrollado como parte de los requisitos para la obtención del título de Técnologo en Desarrollo de Sistemas Informáticos en nombre de Unidades Tecnológicas de Santander.*
