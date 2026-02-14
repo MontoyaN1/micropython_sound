@@ -1,0 +1,23 @@
+{
+  "name": "Monitoreo Acústico en Tiempo Real",
+  "short_name": "Monitoreo Acústico",
+  "description": "Sistema de monitoreo acústico con visualización de mapa de calor y datos históricos",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "utilities"],
+  "lang": "es",
+  "dir": "ltr"
+}
+```
+
+Ahora voy a actualizar el index.html para incluir el manifest:

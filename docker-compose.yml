@@ -1,5 +1,3 @@
-
-
 services:
   # Backend FastAPI
   backend:
@@ -20,7 +18,6 @@ services:
     volumes:
       - ./backend:/app
       - ./location:/app/location
-      - ./src:/app/src # Para reutilizar módulos existentes si es necesario
     restart: unless-stopped
     networks:
       - iot-network
@@ -46,22 +43,6 @@ services:
       - "6379:6379"
     volumes:
       - cache_data:/data
-    restart: unless-stopped
-    networks:
-      - iot-network
-
-  # App Dash existente (se mantiene durante la migración)
-  dash-app:
-    build: .
-    ports:
-      - "8050:8050"
-    environment:
-      - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
-      - INFLUXDB_URL=${INFLUXDB_URL}
-      - INFLUXDB_ORG=${INFLUXDB_ORG}
-    command: python app_dash.py
-    volumes:
-      - .:/app
     restart: unless-stopped
     networks:
       - iot-network

@@ -1,53 +1,105 @@
-# Sistema de Monitoreo de Sonido con MicroPython
+# Sistema de Monitoreo Acústico en Tiempo Real
 
-Proyecto de IoT que utiliza MicroPython para la lógica del sensor de sonido y Streamlit para el frontend.
+Sistema IoT para monitoreo de niveles de ruido en tiempo real utilizando sensores MicroPython y visualización con React + Leaflet.
 
-## Descripción del Proyecto
+## Características Principales
 
-Este sistema permite monitorear niveles de sonido en tiempo real utilizando:
-- Sensores de sonido con MicroPython (ESP32/ESP8266)
-- Node-RED para procesamiento de datos
-- InfluxDB para almacenamiento de series temporales
-- Streamlit/Dash para visualización
+- **Monitoreo en tiempo real**: Datos actualizados cada 5 segundos vía WebSocket
+- **Mapa interactivo**: Heatmap de propagación de ruido con Leaflet
+- **Sensores distribuidos**: Múltiples dispositivos MicroPython (ESP32/ESP8266)
+- **Backend escalable**: FastAPI con WebSocket y API REST
+- **Almacenamiento eficiente**: InfluxDB para series temporales
+- **Procesamiento flexible**: Node-RED para flujos de datos
+- **Cache de alto rendimiento**: DragonflyDB (compatible con Redis)
+
+## Arquitectura del Sistema
+
+El sistema está compuesto por los siguientes componentes:
+
+### Componentes Principales:
+1. **Sensores MicroPython**: Dispositivos ESP32/ESP8266 con micrófonos INMP441
+2. **Backend FastAPI**: API REST + WebSocket para comunicación en tiempo real
+3. **Frontend React**: Interfaz web con mapa interactivo y heatmap
+4. **Cache DragonflyDB**: Almacenamiento en memoria para datos frecuentes
+5. **InfluxDB**: Base de datos de series temporales para datos históricos
+6. **Node-RED**: Procesamiento y transformación de datos MQTT
+7. **EMQX**: Broker MQTT para comunicación con sensores
+
+### Flujo de Datos:
+```
+Sensores → MQTT → Node-RED → InfluxDB → Backend → WebSocket → Frontend
+                              ↓
+                           DragonflyDB (cache)
+```
 
 ## Estructura del Proyecto
 
 ```
 micropython_sound/
-├── sensor/                 # Código MicroPython para sensores
-├── src/                   # Código fuente de la aplicación
+├── sensor/                 # Código MicroPython para sensores ESP32/ESP8266
+├── backend/               # Backend FastAPI (WebSocket + API REST + MQTT)
+├── frontend/              # Frontend React (Leaflet + TailwindCSS + Vite)
 ├── node_red/              # Flujos de Node-RED (configuración)
-├── config/                # Archivos de configuración
+├── location/              # Configuración de ubicaciones de sensores
 ├── doc/                   # Documentación
-├── app_dash.py           # Aplicación Dash/Streamlit
-├── docker-compose.yml    # Configuración Docker
-├── Dockerfile            # Dockerfile para la aplicación
-└── requirements.txt      # Dependencias Python
+├── docker-compose.yml     # Configuración Docker para desarrollo
+├── docker-compose.prod.yml # Configuración Docker para producción
+├── deploy.sh              # Script de despliegue automatizado
+├── EASYPANEL_SETUP.md     # Guía de despliegue en EasyPanel
+├── env-example-easypanel.txt # Plantilla de variables para EasyPanel
+└── .env.example           # Variables de entorno de ejemplo
 ```
 
-## Configuración Rápida
+## Despliegue Rápido
 
-### 1. Clonar el repositorio
+### Opción 1: Desarrollo Local con Docker Compose
+
 ```bash
+# 1. Clonar el repositorio
 git clone <repositorio>
 cd micropython_sound
-```
 
-### 2. Configurar variables de entorno
-```bash
-# Copiar el archivo de ejemplo
-cp config/env.example.txt .env
-
+# 2. Configurar variables de entorno
+cp .env.example .env
 # Editar .env con tus credenciales
-# (Ver config/env.example.txt para detalles)
+
+# 3. Iniciar servicios
+./deploy.sh start dev
+
+# 4. Acceder a la aplicación
+# Frontend: http://localhost:3000
+# Backend API: http://localhost:8000
+# Backend Health: http://localhost:8000/health
 ```
 
-### 3. Instalar dependencias
+### Opción 2: Producción con Docker Compose
+
 ```bash
-pip install -r requirements.txt
+# 1. Configurar variables de producción
+cp .env.example .env
+# Editar .env con valores de producción
+
+# 2. Iniciar servicios de producción
+./deploy.sh start prod
+
+# 3. Verificar estado
+./deploy.sh status prod
 ```
 
-### 4. Configurar Node-RED
+### Opción 3: Despliegue en EasyPanel (Recomendado para producción)
+
+EasyPanel es un panel de control para Docker que simplifica el despliegue. Consulta el archivo [EASYPANEL_SETUP.md](EASYPANEL_SETUP.md) para instrucciones detalladas.
+
+**Pasos básicos:**
+1. Crear proyecto en EasyPanel
+2. Configurar variables de entorno usando `env-example-easypanel.txt`
+3. Copiar contenido de `docker-compose.prod.yml` en el editor de Docker Compose
+4. Subir código vía Git o manualmente
+5. Hacer deploy
+
+**Variables clave para EasyPanel:**
+- `VITE_API_URL`: URL del backend (usar `http://localhost:8000` para mismo proyecto)
+- Credenciales de InfluxDB y MQTT
 1. Importar los flujos desde `node_red/flow.json`
 2. Configurar las credenciales según `node_red/README.md`
 3. Reemplazar placeholders (`TU_*`) con valores reales
@@ -58,7 +110,8 @@ docker-compose up -d
 ```
 
 ### 6. Acceder a la aplicación
-- **Aplicación Dash**: http://localhost:8050
+- **Aplicación React**: http://localhost:3000
+- **API Backend**: http://localhost:8000
 - **Node-RED**: http://localhost:1880 (si está configurado)
 - **InfluxDB**: http://localhost:8086 (si está configurado)
 
@@ -79,7 +132,8 @@ MQTT_BROKER_URL=http://localhost:1883
 MQTT_TOPIC=sensors/espnow/grouped_data
 
 # Aplicación
-DASH_PORT=8050
+FRONTEND_PORT=3000
+BACKEND_PORT=8000
 DEBUG_MODE=false
 ```
 
@@ -105,7 +159,7 @@ El código para los sensores está en `sensor/`. Configura:
 1. **Sensores MicroPython** → Publican datos en MQTT
 2. **Node-RED** → Recibe, procesa y envía a InfluxDB
 3. **InfluxDB** → Almacena datos de series temporales
-4. **Aplicación Dash** → Consulta y visualiza datos
+4. **Aplicación React** → Visualiza datos en tiempo real vía WebSocket
 
 ## Seguridad
 
@@ -120,7 +174,7 @@ El código para los sensores está en `sensor/`. Configura:
 ### Datos no aparecen en la aplicación
 1. Verificar conexión MQTT en Node-RED
 2. Comprobar que InfluxDB recibe datos (logs de Node-RED)
-3. Verificar consultas en la aplicación Dash
+3. Verificar conexión WebSocket en la aplicación React
 
 ### Error de conexión a InfluxDB
 1. Validar token y permisos
@@ -136,12 +190,13 @@ El código para los sensores está en `sensor/`. Configura:
 
 ### Ejecutar en modo desarrollo
 ```bash
-python app_dash.py
+./deploy.sh start
 ```
 
 ### Estructura de código
-- `app_dash.py`: Aplicación principal de visualización
-- `src/`: Módulos de procesamiento y utilidades
+- `backend/`: Backend FastAPI con WebSocket y API REST
+- `frontend/`: Frontend React con mapa Leaflet
+- `deploy.sh`: Script de despliegue automatizado
 - `sensor/`: Código para dispositivos MicroPython
 
 ### Contribuir
@@ -167,9 +222,9 @@ Actualmente se está migrando el sistema a una arquitectura moderna con **FastAP
 - **Backend**: FastAPI con WebSocket y suscripción MQTT directa a EMQX
 - **Frontend**: React con Leaflet para mapas interactivos
 - **Cache**: DragonflyDB para consultas frecuentes
-- **Dashboard en tiempo real**: Actualizaciones de baja latencia vía WebSocket
+- **Dashboard en tiempo real**: Actualizaciones de baja latencia vía WebSocket (implementado)
 
-### Plan de migración
+### Migración completada
 Ver archivo [PLAN_MIGRACION.md](PLAN_MIGRACION.md) para detalles.
 
 ### Estado actual
@@ -177,9 +232,9 @@ Ver archivo [PLAN_MIGRACION.md](PLAN_MIGRACION.md) para detalles.
 - **Fase 2 (Node-RED)**: Mantener flujo existente
 - **Fase 3 (Frontend React)**: Por implementar
 - **Fase 4 (Migración gradual)**: Pendiente
-- **Fase 5 (Retirar Dash)**: Pendiente
+- **Fase 5 (Retirar Dash)**: ✅ Completado
 
-### Ejecutar nueva arquitectura
+### Arquitectura actual
 ```bash
 # Levantar backend y cache
 docker-compose up -d backend cache

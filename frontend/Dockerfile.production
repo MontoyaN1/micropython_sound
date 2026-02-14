@@ -1,0 +1,34 @@
+# Dockerfile de producción para frontend React
+FROM node:18-alpine AS builder
+
+WORKDIR /app
+
+# Copiar archivos de configuración de dependencias
+COPY package.json package-lock.json* ./
+
+# Instalar todas las dependencias (incluyendo devDependencies para build)
+RUN npm ci
+
+# Copiar todos los archivos del proyecto
+COPY . .
+
+# Construir aplicación para producción
+RUN npm run build
+
+# Etapa de producción
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Instalar servidor estático
+RUN npm install -g serve
+
+# Copiar build desde la etapa builder
+COPY --from=builder /app/dist ./dist
+
+# Exponer puerto
+EXPOSE 3000
+
+# Comando para servir archivos estáticos
+# La variable VITE_API_URL se inyecta en runtime desde docker-compose
+CMD ["serve", "-s", "dist", "-l", "3000", "--cors", "--no-clipboard", "--no-compression"]

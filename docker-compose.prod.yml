@@ -1,0 +1,100 @@
+services:
+  # Backend FastAPI - API REST + WebSocket
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.production
+    container_name: monitoreo-backend-prod
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # InfluxDB (variables esenciales)
+      - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
+      - INFLUXDB_URL=${INFLUXDB_URL}
+      - INFLUXDB_ORG=${INFLUXDB_ORG}
+      - INFLUXDB_BUCKET=${INFLUXDB_BUCKET}
+
+      # MQTT (variables esenciales)
+      - MQTT_BROKER=${MQTT_BROKER}
+      - MQTT_PORT=${MQTT_PORT}
+      - MQTT_TOPIC=${MQTT_TOPIC}
+
+      # Redis/DragonflyDB (interna)
+      - REDIS_URL=redis://cache:6379
+
+      # FastAPI básico
+      - ENVIRONMENT=production
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    volumes:
+      - ./location:/app/location:ro
+    depends_on:
+      cache:
+        condition: service_started
+    networks:
+      - monitoreo-network
+
+  # Frontend React
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.production
+    container_name: monitoreo-frontend-prod
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - VITE_API_URL=${VITE_API_URL}
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+    depends_on:
+      - backend
+    networks:
+      - monitoreo-network
+
+  # Cache DragonflyDB (compatible con Redis) - versión optimizada para recursos limitados
+  cache:
+    image: docker.dragonflydb.io/dragonflydb/dragonfly:latest
+    container_name: monitoreo-cache-prod
+    restart: unless-stopped
+    command:
+      [
+        "--logtostderr",
+        "--maxmemory=384mb",
+        "--proactor_threads=1",
+        "--cache_mode=true",
+      ]
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    volumes:
+      - cache_data:/data
+    networks:
+      - monitoreo-network
+
+networks:
+  monitoreo-network:
+    driver: bridge
+
+volumes:
+  cache_data:
+    driver: local

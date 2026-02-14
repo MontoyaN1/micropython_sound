@@ -1,36 +1,43 @@
-import { useEffect, useRef, useState } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet'
-import L from 'leaflet'
-import 'leaflet.heat'
-import { Activity, Volume2, MapPin, Target } from 'lucide-react'
+import { useEffect, useRef, useState } from "react";
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Popup,
+  Circle,
+  useMap,
+} from "react-leaflet";
+import L from "leaflet";
+import "leaflet.heat";
+import { Activity, Volume2, MapPin, Target } from "lucide-react";
 
-const DEFAULT_CENTER = [4.609710, -74.081749] // Bogotá
-const DEFAULT_ZOOM = 14
+const DEFAULT_CENTER = [4.60971, -74.081749]; // Bogotá
+const DEFAULT_ZOOM = 14;
 
 // Iconos personalizados
 const createSensorIcon = (value) => {
-  let colorClass = 'green'
-  let borderClass = 'border-green-500'
-  let textClass = 'text-green-500'
-  let bgClass = 'bg-green-500'
-  
+  let colorClass = "green";
+  let borderClass = "border-green-500";
+  let textClass = "text-green-500";
+  let bgClass = "bg-green-500";
+
   if (value >= 85) {
-    colorClass = 'red'
-    borderClass = 'border-red-500'
-    textClass = 'text-red-500'
-    bgClass = 'bg-red-500'
+    colorClass = "red";
+    borderClass = "border-red-500";
+    textClass = "text-red-500";
+    bgClass = "bg-red-500";
   } else if (value >= 70) {
-    colorClass = 'orange'
-    borderClass = 'border-orange-500'
-    textClass = 'text-orange-500'
-    bgClass = 'bg-orange-500'
+    colorClass = "orange";
+    borderClass = "border-orange-500";
+    textClass = "text-orange-500";
+    bgClass = "bg-orange-500";
   } else if (value >= 50) {
-    colorClass = 'yellow'
-    borderClass = 'border-yellow-500'
-    textClass = 'text-yellow-500'
-    bgClass = 'bg-yellow-500'
+    colorClass = "yellow";
+    borderClass = "border-yellow-500";
+    textClass = "text-yellow-500";
+    bgClass = "bg-yellow-500";
   }
-  
+
   return L.divIcon({
     html: `
       <div class="relative">
@@ -44,11 +51,11 @@ const createSensorIcon = (value) => {
         </div>
       </div>
     `,
-    className: '',
+    className: "",
     iconSize: [32, 32],
     iconAnchor: [16, 16],
-  })
-}
+  });
+};
 
 const createEpicenterIcon = () => {
   return L.divIcon({
@@ -61,41 +68,41 @@ const createEpicenterIcon = () => {
         </div>
       </div>
     `,
-    className: '',
+    className: "",
     iconSize: [40, 40],
     iconAnchor: [20, 20],
-  })
-}
+  });
+};
 
 const HeatmapLayer = ({ idwData }) => {
-  const map = useMap()
-  const heatLayerRef = useRef(null)
+  const map = useMap();
+  const heatLayerRef = useRef(null);
 
   useEffect(() => {
-    if (!idwData || !idwData.xi || !idwData.yi || !idwData.zi) return
+    if (!idwData || !idwData.xi || !idwData.yi || !idwData.zi) return;
 
     // Limpiar capa anterior
     if (heatLayerRef.current) {
-      map.removeLayer(heatLayerRef.current)
+      map.removeLayer(heatLayerRef.current);
     }
 
     // Convertir datos IDW a puntos de calor
-    const heatPoints = []
-    const xi = idwData.xi
-    const yi = idwData.yi
-    const zi = idwData.zi
+    const heatPoints = [];
+    const xi = idwData.xi;
+    const yi = idwData.yi;
+    const zi = idwData.zi;
 
     // Asumimos que xi, yi son arrays 2D y zi es array 2D
     for (let i = 0; i < zi.length; i++) {
       for (let j = 0; j < zi[i].length; j++) {
-        const lat = yi[i][j] || yi[i]?.[0] || DEFAULT_CENTER[0]
-        const lng = xi[i][j] || xi[0]?.[j] || DEFAULT_CENTER[1]
-        const intensity = zi[i][j] || 0
-        
+        const lat = yi[i][j] || yi[i]?.[0] || DEFAULT_CENTER[0];
+        const lng = xi[i][j] || xi[0]?.[j] || DEFAULT_CENTER[1];
+        const intensity = zi[i][j] || 0;
+
         if (intensity > 0) {
           // Normalizar intensidad para heatmap (0-1)
-          const normalizedIntensity = Math.min(intensity / 100, 1)
-          heatPoints.push([lat, lng, normalizedIntensity])
+          const normalizedIntensity = Math.min(intensity / 100, 1);
+          heatPoints.push([lat, lng, normalizedIntensity]);
         }
       }
     }
@@ -106,49 +113,50 @@ const HeatmapLayer = ({ idwData }) => {
         blur: 15,
         maxZoom: 17,
         gradient: {
-          0.1: 'blue',
-          0.3: 'cyan',
-          0.5: 'lime',
-          0.7: 'yellow',
-          0.9: 'red'
+          0.0: "#0d0887", // Azul oscuro profundo
+          0.2: "#5601a3", // Púrpura oscuro
+          0.4: "#8b0aa5", // Púrpura magenta
+          0.6: "#b93289", // Rosa magenta
+          0.8: "#db5a68", // Rosa anaranjado
+          1.0: "#f89441", // Naranja amarillento
         },
-        opacity: 0.6
-      }).addTo(map)
+        opacity: 0.6,
+      }).addTo(map);
     }
 
     return () => {
       if (heatLayerRef.current) {
-        map.removeLayer(heatLayerRef.current)
+        map.removeLayer(heatLayerRef.current);
       }
-    }
-  }, [map, idwData])
+    };
+  }, [map, idwData]);
 
-  return null
-}
+  return null;
+};
 
 const MapBoundsUpdater = ({ sensors }) => {
-  const map = useMap()
+  const map = useMap();
 
   useEffect(() => {
     if (sensors.length > 0) {
       const bounds = L.latLngBounds(
-        sensors.map(sensor => [sensor.latitude, sensor.longitude])
-      )
-      map.fitBounds(bounds, { padding: [50, 50] })
+        sensors.map((sensor) => [sensor.latitude, sensor.longitude]),
+      );
+      map.fitBounds(bounds, { padding: [50, 50] });
     }
-  }, [map, sensors])
+  }, [map, sensors]);
 
-  return null
-}
+  return null;
+};
 
 const RealTimeMap = ({ sensorData, idwData, epicenter }) => {
-  const mapRef = useRef(null)
-  const [showHeatmap, setShowHeatmap] = useState(true)
-  const [showEpicenter, setShowEpicenter] = useState(true)
+  const mapRef = useRef(null);
+  const [showHeatmap, setShowHeatmap] = useState(true);
+  const [showEpicenter, setShowEpicenter] = useState(true);
 
   const handleMapCreated = (map) => {
-    mapRef.current = map
-  }
+    mapRef.current = map;
+  };
 
   return (
     <div className="relative h-full">
@@ -165,14 +173,15 @@ const RealTimeMap = ({ sensorData, idwData, epicenter }) => {
               <span className="text-sm font-medium">Mapa de Calor</span>
             </label>
             <div className="flex items-center space-x-1">
-              <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-              <div className="w-3 h-3 rounded-full bg-cyan-500"></div>
-              <div className="w-3 h-3 rounded-full bg-lime-500"></div>
-              <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-              <div className="w-3 h-3 rounded-full bg-red-500"></div>
+              <div className="w-3 h-3 rounded-full bg-[#0d0887]"></div>
+              <div className="w-3 h-3 rounded-full bg-[#5601a3]"></div>
+              <div className="w-3 h-3 rounded-full bg-[#8b0aa5]"></div>
+              <div className="w-3 h-3 rounded-full bg-[#b93289]"></div>
+              <div className="w-3 h-3 rounded-full bg-[#db5a68]"></div>
+              <div className="w-3 h-3 rounded-full bg-[#f89441]"></div>
             </div>
           </div>
-          
+
           <div className="flex items-center justify-between">
             <label className="flex items-center space-x-2 cursor-pointer">
               <input
@@ -186,7 +195,7 @@ const RealTimeMap = ({ sensorData, idwData, epicenter }) => {
             <Target className="h-4 w-4 text-red-500" />
           </div>
         </div>
-        
+
         <div className="card p-3">
           <div className="flex items-center space-x-2 mb-2">
             <Activity className="h-4 w-4 text-primary-600" />
@@ -223,11 +232,11 @@ const RealTimeMap = ({ sensorData, idwData, epicenter }) => {
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        
+
         {showHeatmap && idwData && <HeatmapLayer idwData={idwData} />}
-        
+
         <MapBoundsUpdater sensors={sensorData} />
-        
+
         {sensorData.map((sensor) => (
           <Marker
             key={sensor.micro_id}
@@ -237,7 +246,7 @@ const RealTimeMap = ({ sensorData, idwData, epicenter }) => {
             <Popup>
               <div className="p-2">
                 <div className="flex items-center space-x-2 mb-2">
-                   <MapPin className="h-4 w-4 text-accent-500" />
+                  <MapPin className="h-4 w-4 text-accent-500" />
                   <h3 className="font-bold">{sensor.location_name}</h3>
                 </div>
                 <div className="space-y-1">
@@ -247,18 +256,24 @@ const RealTimeMap = ({ sensorData, idwData, epicenter }) => {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-primary-600">Nivel:</span>
-                    <span className={`font-bold ${
-                      sensor.value >= 85 ? 'text-red-600' :
-                      sensor.value >= 70 ? 'text-orange-600' :
-                      sensor.value >= 50 ? 'text-yellow-600' : 'text-green-600'
-                    }`}>
+                    <span
+                      className={`font-bold ${
+                        sensor.value >= 85
+                          ? "text-red-600"
+                          : sensor.value >= 70
+                            ? "text-orange-600"
+                            : sensor.value >= 50
+                              ? "text-yellow-600"
+                              : "text-green-600"
+                      }`}
+                    >
                       {sensor.value.toFixed(1)} dB
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-primary-600">Actualizado:</span>
                     <span className="text-sm">
-                      {new Date(sensor.last_update).toLocaleTimeString('es-ES')}
+                      {new Date(sensor.last_update).toLocaleTimeString("es-ES")}
                     </span>
                   </div>
                 </div>
@@ -266,7 +281,7 @@ const RealTimeMap = ({ sensorData, idwData, epicenter }) => {
             </Popup>
           </Marker>
         ))}
-        
+
         {showEpicenter && epicenter && (
           <Marker
             position={[epicenter.latitude, epicenter.longitude]}
@@ -275,22 +290,28 @@ const RealTimeMap = ({ sensorData, idwData, epicenter }) => {
             <Popup>
               <div className="p-2">
                 <div className="flex items-center space-x-2 mb-2">
-                   <Target className="h-4 w-4 text-red-500" />
+                  <Target className="h-4 w-4 text-red-500" />
                   <h3 className="font-bold">Epicentro Estimado</h3>
                 </div>
                 <div className="space-y-1">
                   <div className="flex justify-between">
                     <span className="text-primary-600">Latitud:</span>
-                    <span className="font-medium">{epicenter.latitude.toFixed(6)}</span>
+                    <span className="font-medium">
+                      {epicenter.latitude.toFixed(6)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-primary-600">Longitud:</span>
-                    <span className="font-medium">{epicenter.longitude.toFixed(6)}</span>
+                    <span className="font-medium">
+                      {epicenter.longitude.toFixed(6)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-primary-600">Calculado:</span>
                     <span className="text-sm">
-                      {new Date(epicenter.calculated_at).toLocaleTimeString('es-ES')}
+                      {new Date(epicenter.calculated_at).toLocaleTimeString(
+                        "es-ES",
+                      )}
                     </span>
                   </div>
                 </div>
@@ -300,7 +321,7 @@ const RealTimeMap = ({ sensorData, idwData, epicenter }) => {
         )}
       </MapContainer>
     </div>
-  )
-}
+  );
+};
 
-export default RealTimeMap
+export default RealTimeMap;

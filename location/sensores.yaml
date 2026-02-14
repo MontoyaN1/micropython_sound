@@ -1,25 +1,45 @@
+# Configuración de sensores para sistema de monitoreo acústico
+# Sistema de coordenadas relativas para plano de 5x14 metros
+#
+# Formato:
+#   x: 0-5 metros (derecha=0, izquierda=5)
+#   y: 0-14 metros (abajo=0, arriba=14)
+#   coordinates_type: "relative" para coordenadas relativas en metros
+#   room: Nombre descriptivo de la ubicación
+
 microcontrollers:
   micro_E1:
-    location: [1.5, 3]
+    location: [1.5, 3] # x=1.5m, y=3m
     coordinates_type: "relative"
     room: "Exterior 1"
+
   micro_E2:
-    location: [3.5, 2]
+    location: [3.5, 2] # x=3.5m, y=2m
     coordinates_type: "relative"
     room: "Exterior 2"
+
   micro_E3:
-    location: [1.5, 7]
+    location: [1.5, 7] # x=1.5m, y=7m
     coordinates_type: "relative"
     room: "Sala - Entrada"
+
   micro_E4:
-    location: [1.5, 11]
+    location: [1.5, 11] # x=1.5m, y=11m
     coordinates_type: "relative"
     room: "Sala - lavadero"
+
   micro_E5:
-    location: [3.5, 11]
+    location: [3.5, 11] # x=3.5m, y=11m
     coordinates_type: "relative"
     room: "Cocina"
+
   micro_E255:
-    location: [3.5, 6]
+    location: [3.5, 6] # x=3.5m, y=6m
     coordinates_type: "relative"
     room: "Oficina"
+
+# Notas:
+# 1. El sistema convierte automáticamente (x, y) a (latitude=y, longitude=x) para el frontend
+# 2. Para coordenadas GPS reales, cambiar coordinates_type a "gps" y usar [latitud, longitud]
+# 3. El frontend espera coordenadas en formato: latitude = y, longitude = x
+# 4. El origen (0,0) está en la esquina inferior derecha del plano

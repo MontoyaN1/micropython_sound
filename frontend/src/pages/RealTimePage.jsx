@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -28,6 +28,13 @@ const RealTimePage = () => {
   const idwData = connected ? wsIdwData : testIdwData;
   const epicenter = connected ? wsEpicenter : testEpicenter;
 
+  const [showHeatmap, setShowHeatmap] = useState(true);
+  const [showEpicenter, setShowEpicenter] = useState(true);
+  const [showGrid, setShowGrid] = useState(true);
+  const [colorScheme, setColorScheme] = useState("plasma");
+  const [opacity, setOpacity] = useState(0.6);
+  const [idwPower, setIdwPower] = useState(2);
+
   const [stats, setStats] = useState({
     avgNoise: 0,
     maxNoise: 0,
@@ -35,8 +42,106 @@ const RealTimePage = () => {
     criticalSensors: 0,
   });
 
-  const [showHeatmap, setShowHeatmap] = useState(true);
-  const [showEpicenter, setShowEpicenter] = useState(true);
+  console.log("RealTimePage - Estado actual:", {
+    connected,
+    showHeatmap,
+    showEpicenter,
+    epicenterFromWS: wsEpicenter,
+    epicenterToPass: showEpicenter ? epicenter : null,
+    sensorCount: sensorData.length,
+  });
+
+  // Función para generar gradiente del heatmap basado en el esquema de color
+  const heatmapGradientStyle = useMemo(() => {
+    const getColorStops = (scheme) => {
+      switch (scheme) {
+        case "viridis":
+          return [
+            `rgba(68, 1, 84, ${opacity})`,
+            `rgba(72, 35, 116, ${opacity})`,
+            `rgba(64, 67, 135, ${opacity})`,
+            `rgba(52, 94, 141, ${opacity})`,
+            `rgba(41, 121, 135, ${opacity})`,
+            `rgba(31, 146, 120, ${opacity})`,
+            `rgba(53, 173, 96, ${opacity})`,
+            `rgba(109, 199, 63, ${opacity})`,
+            `rgba(180, 222, 44, ${opacity})`,
+            `rgba(253, 231, 37, ${opacity})`,
+          ];
+        case "plasma":
+          return [
+            `rgba(13, 8, 135, ${opacity})`,
+            `rgba(84, 2, 163, ${opacity})`,
+            `rgba(139, 10, 165, ${opacity})`,
+            `rgba(185, 50, 137, ${opacity})`,
+            `rgba(219, 90, 104, ${opacity})`,
+            `rgba(244, 136, 73, ${opacity})`,
+            `rgba(254, 188, 43, ${opacity})`,
+            `rgba(240, 249, 33, ${opacity})`,
+          ];
+        case "inferno":
+          return [
+            `rgba(0, 0, 4, ${opacity})`,
+            `rgba(31, 12, 72, ${opacity})`,
+            `rgba(85, 15, 109, ${opacity})`,
+            `rgba(136, 34, 106, ${opacity})`,
+            `rgba(186, 54, 85, ${opacity})`,
+            `rgba(227, 89, 51, ${opacity})`,
+            `rgba(249, 140, 10, ${opacity})`,
+            `rgba(252, 201, 38, ${opacity})`,
+            `rgba(252, 255, 164, ${opacity})`,
+          ];
+        case "magma":
+          return [
+            `rgba(0, 0, 4, ${opacity})`,
+            `rgba(28, 16, 68, ${opacity})`,
+            `rgba(79, 18, 123, ${opacity})`,
+            `rgba(129, 37, 129, ${opacity})`,
+            `rgba(181, 54, 122, ${opacity})`,
+            `rgba(229, 80, 100, ${opacity})`,
+            `rgba(251, 135, 97, ${opacity})`,
+            `rgba(254, 194, 135, ${opacity})`,
+            `rgba(252, 253, 191, ${opacity})`,
+          ];
+        case "bluered":
+          return [
+            `rgba(0, 0, 255, ${opacity})`,
+            `rgba(64, 64, 255, ${opacity})`,
+            `rgba(128, 128, 255, ${opacity})`,
+            `rgba(192, 192, 255, ${opacity})`,
+            `rgba(255, 192, 192, ${opacity})`,
+            `rgba(255, 128, 128, ${opacity})`,
+            `rgba(255, 64, 64, ${opacity})`,
+            `rgba(255, 0, 0, ${opacity})`,
+          ];
+        default:
+          return [
+            `rgba(68, 1, 84, ${opacity})`,
+            `rgba(72, 35, 116, ${opacity})`,
+            `rgba(64, 67, 135, ${opacity})`,
+            `rgba(52, 94, 141, ${opacity})`,
+            `rgba(41, 121, 135, ${opacity})`,
+            `rgba(31, 146, 120, ${opacity})`,
+            `rgba(53, 173, 96, ${opacity})`,
+            `rgba(109, 199, 63, ${opacity})`,
+            `rgba(180, 222, 44, ${opacity})`,
+            `rgba(253, 231, 37, ${opacity})`,
+          ];
+      }
+    };
+
+    const colorStops = getColorStops(colorScheme);
+    const gradientStops = colorStops
+      .map(
+        (color, index) =>
+          `${color} ${(index / (colorStops.length - 1)) * 100}%`,
+      )
+      .join(", ");
+
+    return {
+      background: `linear-gradient(to right, ${gradientStops})`,
+    };
+  }, [colorScheme, opacity]);
 
   // Calcular estadísticas cuando cambian los datos
   useEffect(() => {
@@ -206,54 +311,268 @@ const RealTimePage = () => {
         </div>
       </div>
 
-      {/* Mapa */}
-      <div className="card p-0 overflow-hidden">
-        <div className="p-4 border-b border-primary-200">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <div
-                className={`w-3 h-3 rounded-full ${connected ? "bg-green-500 animate-pulse" : "bg-red-500"}`}
-              ></div>
-              <h2 className="text-xl font-bold">Mapa en Tiempo Real</h2>
+      {/* Mapa y Controles */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Mapa - ocupa 2/3 del espacio */}
+        <div className="lg:col-span-2">
+          <div className="card p-0 overflow-hidden h-full">
+            <div className="p-3 border-b border-primary-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <div
+                    className={`w-3 h-3 rounded-full ${connected ? "bg-green-500 animate-pulse" : "bg-red-500"}`}
+                  ></div>
+                  <h2 className="text-lg font-bold">Mapa en Tiempo Real</h2>
+                </div>
+                <div className="flex items-center space-x-3 text-xs">
+                  <span className="text-primary-600">
+                    {sensorData.length} sensores • 5m × 14m
+                  </span>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center space-x-4 text-sm">
-              <span className="text-primary-600">
-                {sensorData.length} sensores • 5m × 14m
-              </span>
-              <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                <span>Mapa de calor</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-                <span>Epicentro</span>
-              </div>
+
+            <div className="h-[500px]">
+              {connected ? (
+                <FloorPlanMap
+                  sensorData={sensorData}
+                  idwData={showHeatmap ? idwData : null}
+                  epicenter={showEpicenter ? epicenter : null}
+                  showHeatmap={showHeatmap}
+                  showEpicenter={showEpicenter}
+                  showGrid={showGrid}
+                  colorScheme={colorScheme}
+                  opacity={opacity}
+                  idwPower={idwPower}
+                  key={`floorplan-${showEpicenter}-${showHeatmap}`}
+                />
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center space-y-4">
+                  <div className="w-16 h-16 border-4 border-primary-200 border-t-accent-500 rounded-full animate-spin"></div>
+                  <div className="text-center">
+                    <h3 className="text-lg font-semibold text-primary-900 mb-1">
+                      Conectando al servidor...
+                    </h3>
+                    <p className="text-primary-600">
+                      Estableciendo conexión WebSocket con el backend
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        <div className="h-[600px]">
-          {connected ? (
-            <FloorPlanMap
-              sensorData={sensorData}
-              idwData={showHeatmap ? idwData : null}
-              epicenter={showEpicenter ? epicenter : null}
-              showHeatmap={showHeatmap}
-              showEpicenter={showEpicenter}
-            />
-          ) : (
-            <div className="h-full flex flex-col items-center justify-center space-y-4">
-              <div className="w-16 h-16 border-4 border-primary-200 border-t-accent-500 rounded-full animate-spin"></div>
-              <div className="text-center">
-                <h3 className="text-lg font-semibold text-primary-900 mb-1">
-                  Conectando al servidor...
-                </h3>
-                <p className="text-primary-600">
-                  Estableciendo conexión WebSocket con el backend
-                </p>
+        {/* Controles de Visualización - ocupa 1/3 del espacio */}
+        <div className="lg:col-span-1">
+          <div className="card h-full">
+            <h3 className="font-semibold text-lg mb-4">
+              Controles de Visualización
+            </h3>
+            <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
+              {/* Controles principales */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-3 bg-primary-50 rounded-lg">
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={showHeatmap}
+                      onChange={(e) => setShowHeatmap(e.target.checked)}
+                      className="rounded text-accent-500"
+                    />
+                    <span className="text-sm font-medium">Mapa de Calor</span>
+                    <span className="text-xs text-primary-500 ml-1">
+                      {idwData ? "✓ Datos" : "✗ Sin datos"}
+                    </span>
+                  </label>
+                  <div className="flex items-center space-x-1">
+                    <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                    <div className="w-3 h-3 rounded-full bg-cyan-500"></div>
+                    <div className="w-3 h-3 rounded-full bg-lime-500"></div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between p-3 bg-primary-50 rounded-lg">
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={showEpicenter}
+                      onChange={(e) => {
+                        console.log(
+                          "Epicentro checkbox cambiado:",
+                          e.target.checked,
+                        );
+                        setShowEpicenter(e.target.checked);
+                      }}
+                      className="rounded text-accent-500"
+                    />
+                    <span className="text-sm font-medium">Epicentro</span>
+                  </label>
+                  <div className="w-4 h-4 rounded-full bg-red-500 animate-pulse"></div>
+                </div>
+
+                <div className="flex items-center justify-between p-3 bg-primary-50 rounded-lg">
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={showGrid}
+                      onChange={(e) => setShowGrid(e.target.checked)}
+                      className="rounded text-accent-500"
+                    />
+                    <span className="text-sm font-medium">Cuadrícula</span>
+                  </label>
+                  <div className="w-4 h-4 text-primary-600">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <rect x="3" y="3" width="7" height="7"></rect>
+                      <rect x="14" y="3" width="7" height="7"></rect>
+                      <rect x="3" y="14" width="7" height="7"></rect>
+                      <rect x="14" y="14" width="7" height="7"></rect>
+                    </svg>
+                  </div>
+                </div>
               </div>
+
+              {/* Información del plano */}
+              <div className="p-3 bg-primary-50 rounded-lg">
+                <div className="text-sm font-medium mb-2">
+                  Información del Plano
+                </div>
+                <div className="space-y-1 text-xs text-primary-600">
+                  <div className="flex justify-between">
+                    <span>Dimensiones:</span>
+                    <span className="font-medium">5m × 14m</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Cuadrícula:</span>
+                    <span className="font-medium">1m × 1m</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Sensores activos:</span>
+                    <span className="font-medium">{sensorData.length}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Escala:</span>
+                    <span className="font-medium">40.4 px/m</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Leyenda de colores para sensores */}
+              <div className="p-3 bg-primary-50 rounded-lg">
+                <div className="text-sm font-medium mb-2">
+                  Leyenda de Sensores
+                </div>
+                <div className="space-y-1 text-xs">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                    <span>&lt; 50 dB (Bajo)</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                    <span>50-70 dB (Moderado)</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+                    <span>70-85 dB (Alto)</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                    <span>&gt; 85 dB (Crítico)</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Configuración del mapa de calor (solo si está activo) */}
+              {showHeatmap && idwData && (
+                <div className="p-3 bg-primary-50 rounded-lg">
+                  <div className="text-sm font-medium mb-2">
+                    Configuración del Mapa de Calor
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span>Esquema de Color</span>
+                        <select
+                          value={colorScheme}
+                          onChange={(e) => setColorScheme(e.target.value)}
+                          className="text-xs bg-white border border-primary-200 rounded px-2 py-1"
+                        >
+                          <option value="viridis">Viridis</option>
+                          <option value="plasma">Plasma</option>
+                          <option value="inferno">Inferno</option>
+                          <option value="magma">Magma</option>
+                          <option value="bluered">Bluered</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span>Opacidad: {Math.round(opacity * 100)}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0.1"
+                        max="1.0"
+                        step="0.1"
+                        value={opacity}
+                        onChange={(e) => setOpacity(parseFloat(e.target.value))}
+                        className="w-full h-2 bg-primary-200 rounded-lg appearance-none cursor-pointer"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span>Potencia IDW: {idwPower.toFixed(1)}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0.5"
+                        max="5.0"
+                        step="0.5"
+                        value={idwPower}
+                        onChange={(e) =>
+                          setIdwPower(parseFloat(e.target.value))
+                        }
+                        className="w-full h-2 bg-primary-200 rounded-lg appearance-none cursor-pointer"
+                      />
+                      <div className="flex justify-between text-xs text-primary-500 mt-1">
+                        <span>Suave</span>
+                        <span>Pronunciado</span>
+                      </div>
+                    </div>
+
+                    {/* Leyenda de colores del heatmap */}
+                    <div className="pt-2">
+                      <div className="flex justify-between text-xs mb-1">
+                        <span>Bajo</span>
+                        <span>Alto</span>
+                      </div>
+                      <div className="w-full h-3 rounded-lg overflow-hidden">
+                        <div
+                          className="w-full h-full"
+                          style={heatmapGradientStyle}
+                        ></div>
+                      </div>
+                      <div className="text-xs text-primary-600 text-center mt-1">
+                        Escala{" "}
+                        {colorScheme.charAt(0).toUpperCase() +
+                          colorScheme.slice(1)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       </div>
 

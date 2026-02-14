@@ -22,7 +22,6 @@ newgrp docker
 # 4. Acceder a la aplicación
 # Frontend: http://localhost:3000
 # Backend API: http://localhost:8000
-# Dash legacy: http://localhost:8050
 ```
 
 ### Opción 2: Despliegue Manual (Sin Docker)
@@ -46,8 +45,8 @@ docker run -d -p 6379:6379 docker.dragonflydb.io/dragonflydb/dragonfly
 
 ### Opción 3: Despliegue en EasyPanel (VPS)
 ```bash
-# 1. Subir código al servidor
-scp -r . usuario@servidor:/ruta/a/monitoreo-acustico
+# 1. Subir código al servidor (excluyendo node_modules)
+rsync -avz --exclude='node_modules' --exclude='.venv' --exclude='__pycache__' . usuario@servidor:/ruta/a/monitoreo-acustico
 
 # 2. Conectar al servidor y ejecutar
 ssh usuario@servidor
