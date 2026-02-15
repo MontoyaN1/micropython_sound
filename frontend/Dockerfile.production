@@ -15,7 +15,7 @@ RUN npm ci
 COPY . .
 
 # Variable de entorno para la URL de la API (se pasa como build-arg)
-ARG VITE_API_URL=http://localhost:18081
+ARG VITE_API_URL=/api
 
 # Construir aplicación para producción
 RUN echo "Construyendo con VITE_API_URL=${VITE_API_URL}" && \
