@@ -41,28 +41,50 @@ const HistoricalPage = () => {
         setHistoricalData(data);
       } else {
         // Modo fecha específica - calcular horas desde la fecha seleccionada hasta ahora
-        const selectedDate = new Date(specificDate);
-        const now = new Date();
+        // Parsear la fecha en hora local (no UTC)
+        const [year, month, day] = specificDate.split("-").map(Number);
+        const selectedDate = new Date(year, month - 1, day);
+        const startOfDay = new Date(selectedDate);
+        startOfDay.setHours(0, 0, 0, 0);
 
-        // Calcular diferencia en horas
-        const diffMs = now - selectedDate;
+        const now = new Date();
+        const startOfToday = new Date(now);
+        startOfToday.setHours(0, 0, 0, 0);
+
+        // Calcular diferencia en horas desde el inicio del día seleccionado
+        const diffMs = now - startOfDay;
         const diffHours = Math.ceil(diffMs / (1000 * 60 * 60));
 
         // Si la fecha es hoy, usar 24 horas para obtener datos del día completo
         const hoursToFetch =
-          selectedDate.toDateString() === now.toDateString()
+          startOfDay.getTime() === startOfToday.getTime()
             ? 24
             : Math.min(diffHours, 720); // Máximo 30 días (720 horas)
 
         console.log(
-          `Consultando ${hoursToFetch} horas desde ${selectedDate.toLocaleDateString()}`,
+          `Consultando ${hoursToFetch} horas desde ${startOfDay.toLocaleDateString()}`,
         );
         const data = await fetchRecentData(hoursToFetch);
 
         // Filtrar para mostrar solo datos del día seleccionado
+        // Usar comparación de fechas en UTC para evitar problemas de zona horaria
         const filteredData = data.filter((row) => {
           const rowDate = new Date(row.time);
-          return rowDate.toDateString() === selectedDate.toDateString();
+          const rowUTCDate = new Date(
+            Date.UTC(
+              rowDate.getUTCFullYear(),
+              rowDate.getUTCMonth(),
+              rowDate.getUTCDate(),
+            ),
+          );
+          const selectedUTCDate = new Date(
+            Date.UTC(
+              startOfDay.getUTCFullYear(),
+              startOfDay.getUTCMonth(),
+              startOfDay.getUTCDate(),
+            ),
+          );
+          return rowUTCDate.getTime() === selectedUTCDate.getTime();
         });
 
         setHistoricalData(filteredData);
@@ -362,6 +384,7 @@ const HistoricalPage = () => {
                   year: "numeric",
                   month: "long",
                   day: "numeric",
+                  timeZone: "UTC",
                 })}
           </div>
           <div className="text-sm text-primary-600">
@@ -469,9 +492,6 @@ const HistoricalPage = () => {
                   <th className="text-left py-3 px-4 text-sm font-medium text-primary-600">
                     Nivel de Ruido (dB)
                   </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-primary-600">
-                    Coordenadas
-                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -508,11 +528,6 @@ const HistoricalPage = () => {
                           }`}
                         >
                           {row.value.toFixed(1)} dB
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="text-sm text-primary-600">
-                          {row.latitude.toFixed(6)}, {row.longitude.toFixed(6)}
                         </div>
                       </td>
                     </tr>
