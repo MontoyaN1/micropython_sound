@@ -1,14 +1,55 @@
-version: '3.8'
-
 services:
-  dash-app:
-    build: .
+  # Backend FastAPI
+  backend:
+    build: ./backend
     ports:
-      - "8050:8050" # host:container
+      - "8000:8000"
     environment:
       - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
       - INFLUXDB_URL=${INFLUXDB_URL}
       - INFLUXDB_ORG=${INFLUXDB_ORG}
-    command: python app_dash.py
+      - INFLUXDB_BUCKET=${INFLUXDB_BUCKET}
+      - MQTT_BROKER=${MQTT_BROKER}
+      - MQTT_PORT=${MQTT_PORT}
+      - MQTT_TOPIC=${MQTT_TOPIC:-sensores/ruido}
+      - REDIS_URL=redis://cache:6379
+    depends_on:
+      - cache
     volumes:
-      - .:/app
+      - ./backend:/app
+      - ./location:/app/location
+    restart: unless-stopped
+    networks:
+      - iot-network
+
+  # Frontend React
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - iot-network
+
+  # Cache DragonflyDB (compatible con Redis)
+  cache:
+    image: docker.dragonflydb.io/dragonflydb/dragonfly
+    ports:
+      - "6379:6379"
+    volumes:
+      - cache_data:/data
+    restart: unless-stopped
+    networks:
+      - iot-network
+
+networks:
+  iot-network:
+    driver: bridge
+
+volumes:
+  cache_data:

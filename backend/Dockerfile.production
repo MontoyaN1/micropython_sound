@@ -1,0 +1,33 @@
+# Dockerfile de producción para backend FastAPI
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Instalar dependencias del sistema para compilar paquetes
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    libgomp1 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Actualizar pip
+RUN pip install --upgrade pip
+
+# Copiar requirements.txt e instalar dependencias
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copiar código de la aplicación
+COPY app ./app
+# location se monta como volumen en tiempo de ejecución
+
+# Variables de entorno
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+# Exponer puerto
+EXPOSE 8000
+
+# Comando para producción
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Fondo circular -->
+  <circle cx="50" cy="50" r="48" fill="#4f46e5" stroke="#3730a3" stroke-width="2"/>
+
+  <!-- Icono de sonido/ondas -->
+  <g fill="white">
+    <!-- Onda central más grande -->
+    <path d="M50,30 L50,70" stroke="white" stroke-width="6" stroke-linecap="round"/>
+
+    <!-- Ondas a la izquierda -->
+    <path d="M35,40 Q30,50 35,60" stroke="white" stroke-width="4" stroke-linecap="round" fill="none"/>
+    <path d="M25,35 Q15,50 25,65" stroke="white" stroke-width="3" stroke-linecap="round" fill="none"/>
+
+    <!-- Ondas a la derecha -->
+    <path d="M65,40 Q70,50 65,60" stroke="white" stroke-width="4" stroke-linecap="round" fill="none"/>
+    <path d="M75,35 Q85,50 75,65" stroke="white" stroke-width="3" stroke-linecap="round" fill="none"/>
+
+    <!-- Micrófono pequeño en el centro -->
+    <circle cx="50" cy="50" r="4" fill="white"/>
+    <rect x="48" y="35" width="4" height="15" rx="2" fill="white"/>
+  </g>
+
+  <!-- Efecto de brillo sutil -->
+  <circle cx="30" cy="30" r="15" fill="white" opacity="0.1"/>
+</svg>

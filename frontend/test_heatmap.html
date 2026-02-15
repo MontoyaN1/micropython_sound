@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pr</title>ueba Mapa de Calor - Plano Interior</title>
+    <style>
+        *</style> {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem;
+            color: #333;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 2rem;
+            max-width: 1200px;
+            width: 100%;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        h1 {
+            color: #2d3748;
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            color: #718096;
+            font-size: 1.1rem;
+        }
+
+        .test-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .controls {
+            background: #f7fafc;
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 1px solid #e2e8f0;
+        }
+
+        .control-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .control-group h3 {
+            color: #4a5568;
+            margin-bottom: 0.75rem;
+            font-size: 1.2rem;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .checkbox-group label {
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .status {
+            background: #edf2f7;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1rem;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.9rem;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .status h4 {
+            color: #4a5568;
+            margin-bottom: 0.5rem;
+        }
+
+        .status-line {
+            margin-bottom: 0.25rem;
+            padding: 0.25rem;
+            border-radius: 4px;
+        }
+
+        .status-line.info {
+            background: #bee3f8;
+            color: #2c5282;
+        }
+
+        .status-line.success {
+            background: #c6f6d5;
+            color: #276749;
+        }
+
+        .status-line.warning {
+            background: #feebc8;
+            color: #975a16;
+        }
+
+        .status-line.error {
+            background: #fed7d7;
+            color: #c53030;
+        }
+
+        .visualization {
+            background: #2d3748;
+            border-radius: 12px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 500px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .floor-plan-container {
+            position: relative;
+            width: 404px;
+            height: 1124px;
+            transform: scale(0.5);
+            transform-origin: top left;
+        }
+
+        .floor-plan {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 202px;
+            height: 562px;
+            background: #4a5568;
+            border: 2px solid #718096;
+        }
+
+        .heatmap-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 202px;
+            height: 562px;
+            pointer-events: none;
+            mix-blend-mode: multiply;
+        }
+
+        .grid-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 202px;
+            height: 562px;
+            pointer-events: none;
+        }
+
+        .grid-line {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .grid-line.vertical {
+            width: 1px;
+            height: 100%;
+        }
+
+        .grid-line.horizontal {
+            width: 100%;
+            height: 1px;
+        }
+
+        .sensor-marker {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .sensor-marker.low { background: #48bb78; }
+        .sensor-marker.moderate { background: #ecc94b; }
+        .sensor-marker.high { background: #ed8936; }
+        .sensor-marker.critical { background: #f56565; }
+
+        .epicenter-marker {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            background: #f56565;
+            border: 3px solid white;
+            box-shadow: 0 0 0 3px rgba(245, 101, 101, 0.3);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(245, 101, 101, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(245, 101, 101, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(245, 101, 101, 0); }
+        }
+
+        .legend {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+        }
+
+        .legend-color.blue { background: rgba(0, 0, 255, 0.6); }
+        .legend-color.cyan { background: rgba(0, 255, 255, 0.6); }
+        .legend-color.green { background: rgba(0, 255, 0, 0.6); }
+        .legend-color.yellow { background: rgba(255, 255, 0, 0.6); }
+        .legend-color.red { background: rgba(255, 0, 0, 0.6); }
+
+        .instructions {
+            background: #e6fffa;
+            border: 1px solid #81e6d9;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 2rem;
+        }
+
+        .instructions h3 {
+            color: #285e61;
+            margin-bottom: 0.5rem;
+        }
+
+        .instructions ul {
+            margin-left: 1.5rem;
+            color: #4a5568;
+        }
+
+        .instructions li {
+            margin-bottom: 0.5rem;
+        }
+
+        @media (max-width: 768px) {
+            .test-section {
+                grid-template-columns: 1fr;
+            }
+
+            .floor-plan-container {
+                transform: scale(0.4);
+            }
+        }
+    </style>
+</head>
+<body></body>
+    <div class="container">
+        <header></header>
+            <h1></h1>🔊 Prueba de Mapa de Calor</h1>
+            <p class="subtitle">Visualización de propagación de ruido en plano interior</p>
+        </header>
+
+        <div class="test-section">
+            <div class="controls">
+                <div class="control-group">
+                    <h3></h3>🎚️ Configuración de Datos</h3>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="useTestData" checked>
+                        <label for="useTestData">Usar Datos de Prueba</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="simulateNoise">
+                        <label for="simulateNoise">Simular Ruido Variable</label>
+                    </div>
+                </div>
+
+                <div class="status">
+                    <h4></h4>📊 Estado del Sistema</h4>
+                    <div id="statusMessages">
+                        <div class="status-line info">Sistema inicializado</div>
+                        <div class="status-line success">Datos de prueba cargados</div>
+                        <div class="status-line info">Mapa de calor activado</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="visualization">
+                <div class="floor-plan-container">
+                    <div class="floor-plan" id="floorPlan">
+                        <!-- Plano base -->
+                    </div>
+                    <canvas class="heatmap-canvas" id="heatmapCanvas" width="202" height="562"></canvas>
+                    <div class="grid-overlay" id="gridOverlay"></div>
+                    <!-- Sensores y epicentro se agregarán dinámicamente -->
+                </div>
+
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-color blue"></div>
+                        <span>B</span>ajo (&lt; 50 dB)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color cyan"></div>
+                        <span>Mod</span>erado (50-60 dB)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color green"></div>
+                        <span>Al</span>to (60-70 dB)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color yellow"></div>
+                        <span></span>Muy Alto (70-85 dB)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color red"></div>
+                        <span></span>Crítico (&gt; 85 dB)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="instructions">
+            <h3></h3>📖 Instrucciones de Prueba</h3>
+            <ul></ul>
+                <li><strong>Mapa de Calor:</strong> Muestra la interpolación IDW de los niveles de ruido</li>
+                <li><strong>Cuadrícula:</strong> Referencia de 1m × 1m para ubicación espacial</li>
+                <li><strong>Sensores:</strong> Posiciones reales de los dispositivos de medición</li>
+                <li><strong>Epicentro:</strong> Punto de mayor concentración de ruido</li>
+                <li><strong>Simulación:</strong> Actívala para ver cambios dinámicos en el mapa</li>
+                <li><strong>Nota:</strong> Los controles de visualización (Mapa de Calor, Cuadrícula, Epicentro) se encuentran en el componente principal del mapa</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        //</script> Configuración del plano
+        const PLAN_WIDTH = 5; // metros
+        const PLAN_HEIGHT = 14; // metros
+        const PLAN_IMAGE_WIDTH = 202; // píxeles
+        const PLAN_IMAGE_HEIGHT = 562; // píxeles
+        const METERS_TO_PIXELS_X = PLAN_IMAGE_WIDTH / PLAN_WIDTH; // 40.4 px/m
+        const METERS_TO_PIXELS_Y = PLAN_IMAGE_HEIGHT / PLAN_HEIGHT; // 40.14 px/m
+
+        // Datos de prueba (similares a los del frontend real)
+        const testSensors = [
+            { id: "E1", x: 1.5, y: 3.0, value: 45.5, name: "Exterior 1" },
+            { id: "E2", x: 3.5, y: 2.0, value: 52.3, name: "Exterior 2" },
+            { id: "E3", x: 1.5, y: 7.0, value: 48.7, name: "Sala - Entrada" },
+            { id: "E4", x: 1.5, y: 11.0, value: 55.1, name: "Sala - lavadero" },
+            { id: "E5", x: 3.5, y: 11.0, value: 42.8, name: "Cocina" },
+            { id: "E255", x: 3.5, y: 5.0, value: 60.5, name: "Oficina" }
+        ];
+
+        // Datos IDW de prueba (formato 2D)
+        const testIdwData = {
+            xi: Array(8).fill().map((_, i) => Array(6).fill().map((_, j) => j)),
+            yi: Array(8).fill().map((_, i) => Array(6).fill(i * 2)),
+            zi: [
+                [40, 42, 45, 48, 50, 52],
+                [38, 40, 43, 46, 49, 51],
+                [42, 44, 47, 50, 53, 55],
+                [45, 47, 50, 53, 56, 58],
+                [43, 45, 48, 51, 54, 56],
+                [41, 43, 46, 49, 52, 54],
+                [39, 41, 44, 47, 50, 52],
+                [37, 39, 42, 45, 48, 50]
+            ]
+        };
+
+        // Estado de la aplicación
+        let state = {
+            showHeatmap: true,
+            showGrid: true,
+            showSensors: true,
+            showEpicenter: true,
+            useTestData: true,
+            simulateNoise: false,
+            simulationInterval: null
+        };
+
+        // Elementos DOM
+        const elements = {
+            floorPlan: document.getElementById('floorPlan'),
+            heatmapCanvas: document.getElementById('heatmapCanvas'),
+            gridOverlay: document.getElementById('gridOverlay'),
+            statusMessages: document.getElementById('statusMessages')
+        };
+
+        // Utilidades
+        function addStatusMessage(message, type = 'info') {
+            const line = document.createElement('div');
+            line.className = `status-line ${type}`;
+            line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            elements.statusMessages.appendChild(line);
+            elements.statusMessages.scrollTop = elements.statusMessages.scrollHeight;
+        }
+
+        function metersToPixels(xMeters, yMeters) {
+            // Sistema: (0,0) = esquina inferior derecha
+            const xPx = PLAN_IMAGE_WIDTH - (xMeters * METERS_TO_PIXELS_X);
+            const yPx = PLAN_IMAGE_HEIGHT - (yMeters * METERS_TO_PIXELS_Y);
+            return { x: xPx, y: yPx };
+        }
+
+        function getSensorColor(value) {
+            if (value >= 85) return 'critical';
+            if (value >= 70) return 'high';
+            if (value >= 50) return 'moderate';
+            return 'low';
+        }
+
+        // Funciones de renderizado
+        function renderGrid() {
+            elements.gridOverlay.innerHTML = '';
+            if (!state.showGrid) return;
+
+            // Líneas verticales (cada 1 metro)
+            for (let x = 0; x <= PLAN_WIDTH; x++) {
+                const xPx = PLAN_IMAGE_WIDTH - (x * METERS_TO_PIXELS_X);
+                const line = document.createElement('div');
+                line.className = 'grid-line vertical';
+                line.style.left = `${xPx}px`;
+                elements.gridOverlay.appendChild(line);
+            }
+
+            // Líneas horizontales (cada 1 metro)
+            for (let y = 0; y <= PLAN_HEIGHT; y++) {
+                const yPx = PLAN_IMAGE_HEIGHT - (y * METERS_TO_PIXELS_Y);
+                const line = document.createElement('div');
+                line.className = 'grid-line horizontal

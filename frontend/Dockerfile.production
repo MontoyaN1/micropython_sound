@@ -1,0 +1,52 @@
+# Dockerfile de producción para frontend React
+# Construye la aplicación dentro de Docker para consistencia
+
+FROM node:18-alpine AS builder
+
+WORKDIR /app
+
+# Copiar archivos de configuración de dependencias
+COPY package.json package-lock.json* ./
+
+# Instalar todas las dependencias (incluyendo devDependencies para build)
+RUN npm ci
+
+# Copiar todos los archivos del proyecto (incluyendo public/)
+COPY . .
+
+# Variable de entorno para la URL de la API (se pasa como build-arg)
+ARG VITE_API_URL=/api
+
+# Construir aplicación para producción
+RUN echo "Construyendo con VITE_API_URL=${VITE_API_URL}" && \
+    VITE_API_URL=${VITE_API_URL} npm run build
+
+# Verificar que la construcción generó los archivos necesarios
+RUN echo "=== Verificación de archivos construidos ===" && \
+    ls -la dist/ && \
+    echo "=== Archivos JavaScript ===" && \
+    find dist/ -name "*.js" -exec ls -la {} \; 2>/dev/null || echo "No hay archivos JS" && \
+    echo "=== Archivos CSS ===" && \
+    find dist/ -name "*.css" -exec ls -la {} \; 2>/dev/null || echo "No hay archivos CSS"
+
+# Etapa de producción
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Instalar servidor estático y herramientas de diagnóstico
+RUN npm install -g http-server && \
+    apk add --no-cache net-tools iproute2 curl
+
+# Copiar archivos construidos desde la etapa builder
+COPY --from=builder /app/dist ./dist
+
+# Copiar script de entrada
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Exponer puerto
+EXPOSE 3000
+
+# Usar script de entrada
+CMD ["/usr/local/bin/entrypoint.sh"]

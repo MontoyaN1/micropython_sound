@@ -1,0 +1,105 @@
+services:
+  # Reverse Proxy Nginx - Maneja todo el tráfico HTTP/WebSocket y sirve archivos estáticos
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
+    container_name: monitoreo-nginx-prod
+    restart: unless-stopped
+    ports:
+      - "8082:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+    networks:
+      - monitoreo-network
+
+  # Backend FastAPI - API REST + WebSocket
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.production
+    container_name: monitoreo-backend-prod
+    restart: unless-stopped
+    # Exponer para acceso directo en desarrollo local
+    ports:
+      - "18081:8000"
+    environment:
+      # InfluxDB (variables esenciales)
+      - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
+      - INFLUXDB_URL=${INFLUXDB_URL}
+      - INFLUXDB_ORG=${INFLUXDB_ORG}
+      - INFLUXDB_BUCKET=${INFLUXDB_BUCKET}
+
+      # MQTT (variables esenciales)
+      - MQTT_BROKER=${MQTT_BROKER}
+      - MQTT_PORT=${MQTT_PORT}
+      - MQTT_TOPIC=${MQTT_TOPIC}
+
+      # DragonflyDB (interna)
+      - REDIS_URL=redis://cache:6379
+
+      # FastAPI básico
+      - ENVIRONMENT=production
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    volumes:
+      - ./location:/app/location:ro
+    depends_on:
+      cache:
+        condition: service_started
+    networks:
+      - monitoreo-network
+
+  # Frontend React - Solo para construcción, no se ejecuta como servicio
+  frontend-builder:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.production
+      args:
+        # Variable condicional: en producción usa /api, en desarrollo localhost:18081
+        - VITE_API_URL=${VITE_API_URL:-/api}
+    container_name: monitoreo-frontend-builder
+    profiles: ["build"]
+    networks:
+      - monitoreo-network
+
+  # Cache DragonflyDB (compatible con Redis) - versión optimizada para recursos limitados
+  cache:
+    image: docker.dragonflydb.io/dragonflydb/dragonfly:latest
+    container_name: monitoreo-cache-prod
+    restart: unless-stopped
+    command:
+      [
+        "--logtostderr",
+        "--maxmemory=384mb",
+        "--proactor_threads=1",
+        "--cache_mode=true",
+      ]
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    volumes:
+      - cache_data:/data
+    networks:
+      - monitoreo-network
+
+networks:
+  monitoreo-network:
+    driver: bridge
+
+volumes:
+  cache_data:
+    driver: local
