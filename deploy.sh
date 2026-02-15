@@ -364,18 +364,21 @@ cleanup() {
     local compose_file="$1"
     print_header "Limpieza del sistema"
 
-    print_warning "Esta acción eliminará contenedores, imágenes y volúmenes no utilizados"
+    print_warning "Esta acción detendrá y eliminará todos los contenedores, imágenes y volúmenes"
     read -p "¿Continuar? (s/n): " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Ss]$ ]]; then
-        print_info "Eliminando contenedores detenidos..."
-        docker-compose -f "$compose_file" down -v
+        print_info "Deteniendo y eliminando contenedores..."
+        docker-compose -f "$compose_file" down -v --remove-orphans
 
         print_info "Eliminando imágenes huérfanas..."
-        docker image prune -f
+        docker image prune -af
 
         print_info "Eliminando volúmenes no utilizados..."
-        docker volume prune -f
+        docker volume prune -af
+
+        print_info "Eliminando redes no utilizadas..."
+        docker network prune -f
 
         print_success "Limpieza completada"
     else
