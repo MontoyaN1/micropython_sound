@@ -133,23 +133,51 @@ EOF
 
 build_images() {
     local compose_file="$1"
+    local environment="$2"
     print_header "Construyendo imágenes Docker"
 
-    # Construir backend
-    print_info "Construyendo imagen del backend..."
-    if docker-compose -f "$compose_file" build backend; then
-        print_success "Backend construido exitosamente"
+    if [ "$environment" = "prod" ]; then
+        # En producción: construir nginx (que incluye frontend) y backend
+        print_info "Construyendo imagen del backend..."
+        if docker-compose -f "$compose_file" build backend; then
+            print_success "Backend construido exitosamente"
+        else
+            print_error "Error construyendo el backend"
+            exit 1
+        fi
+
+        print_info "Construyendo imagen de nginx (con frontend incluido)..."
+        if docker-compose -f "$compose_file" build nginx; then
+            print_success "Nginx construido exitosamente"
+        else
+            print_error "Error construyendo nginx"
+            exit 1
+        fi
     else
-        print_error "Error construyendo el backend"
-        exit 1
+        # En desarrollo: construir backend y frontend por separado
+        print_info "Construyendo imagen del backend..."
+        if docker-compose -f "$compose_file" build backend; then
+            print_success "Backend construido exitosamente"
+        else
+            print_error "Error construyendo el backend"
+            exit 1
+        fi
+
+        print_info "Construyendo imagen del frontend..."
+        if docker-compose -f "$compose_file" build frontend; then
+            print_success "Frontend construido exitosamente"
+        else
+            print_error "Error construyendo el frontend"
+            exit 1
+        fi
     fi
 
-    # Construir frontend
-    print_info "Construyendo imagen del frontend..."
-    if docker-compose -f "$compose_file" build frontend; then
-        print_success "Frontend construido exitosamente"
+    # Construir cache (siempre)
+    print_info "Construyendo imagen del cache..."
+    if docker-compose -f "$compose_file" build cache; then
+        print_success "Cache construido exitosamente"
     else
-        print_error "Error construyendo el frontend"
+        print_error "Error construyendo el cache"
         exit 1
     fi
 
@@ -166,7 +194,7 @@ start_services() {
 
     if [ -z "$services" ]; then
         if [ "$environment" = "prod" ]; then
-            services="nginx backend frontend cache"
+            services="nginx backend cache"
             print_info "Iniciando servicios de producción: $services"
         else
             services="backend frontend cache"
@@ -212,7 +240,7 @@ restart_services() {
     # Determinar qué servicios reiniciar
     local services=""
     if [ "$environment" = "prod" ]; then
-        services="nginx backend frontend cache"
+        services="nginx backend cache"
     else
         services="backend frontend cache"
     fi
@@ -267,11 +295,13 @@ show_status() {
         print_error "Backend (http://localhost:18081) - OFFLINE"
     fi
 
-    # Frontend
-    if curl -s -f http://localhost:13001 > /dev/null; then
-        print_success "Frontend (http://localhost:13001) - ONLINE"
-    else
-        print_error "Frontend (http://localhost:13001) - OFFLINE"
+    # Frontend (solo en desarrollo)
+    if [ "$ENVIRONMENT" != "prod" ]; then
+        if curl -s -f http://localhost:13001 > /dev/null; then
+            print_success "Frontend (http://localhost:13001) - ONLINE"
+        else
+            print_error "Frontend (http://localhost:13001) - OFFLINE"
+        fi
     fi
 
     # Cache - Determinar nombre del contenedor según entorno
@@ -362,7 +392,7 @@ update_system() {
     # Determinar qué servicios actualizar
     local services=""
     if [ "$environment" = "prod" ]; then
-        services="nginx backend frontend cache"
+        services="nginx backend cache"
         print_info "Actualizando servicios de producción: $services"
     else
         services="backend frontend cache"
@@ -459,7 +489,6 @@ Accesos después del despliegue:
     Frontend React:    http://localhost:13001
     Backend API:       http://localhost:18081
     WebSocket:         ws://localhost:18081/ws/realtime
-    Nginx (proxy):     http://localhost
 
   Producción (con nginx):
     Aplicación completa: http://localhost:8082
@@ -475,7 +504,7 @@ case "${1:-help}" in
         check_dependencies
         check_environment "$ENV_FILE"
         check_config_files
-        build_images "$COMPOSE_FILE"
+        build_images "$COMPOSE_FILE" "$ENVIRONMENT"
         start_services "$COMPOSE_FILE" "$ENV_FILE" "$3" "$ENVIRONMENT"
         sleep 5
         show_status "$COMPOSE_FILE" "$ENVIRONMENT"
@@ -500,10 +529,10 @@ case "${1:-help}" in
         show_logs "$COMPOSE_FILE" "$3"
         ;;
     build)
-        check_dependencies
-        check_environment "$ENV_FILE"
-        build_images "$COMPOSE_FILE"
-        ;;
+    check_dependencies
+    check_environment "$ENV_FILE"
+    build_images "$COMPOSE_FILE" "$ENVIRONMENT"
+    ;;
     update)
         check_dependencies
         check_environment "$ENV_FILE"

@@ -1,0 +1,47 @@
+# Dockerfile para Nginx con archivos estáticos del frontend
+# Construye el frontend y copia los archivos a Nginx
+
+# Etapa 1: Construir el frontend
+FROM node:18-alpine AS frontend-builder
+
+WORKDIR /app
+
+# Copiar archivos de configuración de dependencias
+COPY frontend/package.json frontend/package-lock.json* ./
+
+# Instalar dependencias
+RUN npm ci
+
+# Copiar todos los archivos del frontend
+COPY frontend/ .
+
+# Variable de entorno para la URL de la API
+ARG VITE_API_URL=/api
+
+# Construir aplicación para producción
+RUN echo "Construyendo frontend con VITE_API_URL=${VITE_API_URL}" && \
+    VITE_API_URL=${VITE_API_URL} npm run build
+
+# Verificar que la construcción generó los archivos necesarios
+RUN echo "=== Verificación de archivos construidos ===" && \
+    ls -la dist/ && \
+    echo "=== Archivos en dist/ ===" && \
+    find dist/ -type f | head -20
+
+# Etapa 2: Nginx con archivos estáticos
+FROM nginx:stable
+
+# Copiar configuración de Nginx
+COPY nginx/nginx.conf /etc/nginx/nginx.conf
+
+# Copiar archivos estáticos del frontend
+COPY --from=frontend-builder /app/dist /usr/share/nginx/html
+
+# Crear archivo healthz para verificación
+RUN echo "healthy" > /usr/share/nginx/html/healthz
+
+# Exponer puerto
+EXPOSE 80
+
+# Comando por defecto de Nginx
+CMD ["nginx", "-g", "daemon off;"]

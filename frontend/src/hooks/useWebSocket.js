@@ -1,7 +1,21 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
-const WS_URL = API_URL.replace("http", "ws") + "/ws/realtime";
+
+// Construir URL de WebSocket correctamente para producción (/api) y desarrollo
+const getWebSocketUrl = () => {
+  if (API_URL.startsWith("/")) {
+    // Producción: /api -> ws://{host}/ws/realtime
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const host = window.location.host;
+    return `${protocol}//${host}/ws/realtime`;
+  } else {
+    // Desarrollo: http://localhost:8000 -> ws://localhost:8000/ws/realtime
+    return API_URL.replace("http", "ws") + "/ws/realtime";
+  }
+};
+
+const WS_URL = getWebSocketUrl();
 
 export const useWebSocket = () => {
   const [connected, setConnected] = useState(false);

@@ -34,8 +34,8 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Instalar servidores estáticos y herramientas de diagnóstico
-RUN npm install -g serve http-server && \
+# Instalar servidor estático y herramientas de diagnóstico
+RUN npm install -g http-server && \
     apk add --no-cache net-tools iproute2 curl
 
 # Copiar archivos construidos desde la etapa builder

@@ -1,7 +1,9 @@
 services:
-  # Reverse Proxy Nginx - Maneja todo el tráfico HTTP/WebSocket
+  # Reverse Proxy Nginx - Maneja todo el tráfico HTTP/WebSocket y sirve archivos estáticos
   nginx:
-    image: nginx:alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
     container_name: monitoreo-nginx-prod
     restart: unless-stopped
     ports:
@@ -9,7 +11,6 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
-      - frontend
       - backend
     networks:
       - monitoreo-network
@@ -57,32 +58,16 @@ services:
     networks:
       - monitoreo-network
 
-  # Frontend React
-  frontend:
+  # Frontend React - Solo para construcción, no se ejecuta como servicio
+  frontend-builder:
     build:
       context: ./frontend
       dockerfile: Dockerfile.production
       args:
         # Variable condicional: en producción usa /api, en desarrollo localhost:18081
         - VITE_API_URL=${VITE_API_URL:-/api}
-
-    container_name: monitoreo-frontend-prod
-    restart: unless-stopped
-    # Exponer para acceso directo en desarrollo local
-    ports:
-      - "13001:3000"
-    environment:
-      - NODE_ENV=production
-    deploy:
-      resources:
-        limits:
-          cpus: "0.25"
-          memory: 256M
-        reservations:
-          cpus: "0.1"
-          memory: 128M
-    depends_on:
-      - backend
+    container_name: monitoreo-frontend-builder
+    profiles: ["build"]
     networks:
       - monitoreo-network
 
