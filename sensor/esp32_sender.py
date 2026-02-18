@@ -1,4 +1,4 @@
-"""Sensor ESP32 con INMP441 - Captura y envía dB via ESPNOW (versión simplificada)."""
+"""Sensor ESP32 con INMP441 - Captura y envía dB via ESPNOW"""
 
 import math
 import time

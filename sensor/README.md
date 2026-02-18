@@ -1,203 +1,276 @@
-# Sensor MicroPython - Documentación de Hardware
+# Sistema de Sensores de Sonido con MicroPython
 
 ## Descripción
-Esta carpeta contiene el código MicroPython para los sensores de sonido basados en ESP32/ESP8266 con micrófonos INMP441. El sistema captura niveles de sonido en tiempo real y los transmite vía MQTT para procesamiento posterior.
 
-## Hardware Requerido
+Este sistema implementa una red de sensores de sonido basados en ESP32 que capturan niveles de decibelios (dB) en tiempo real y los transmiten mediante ESP-NOW a un gateway central, el cual agrega los datos y los envía a un broker MQTT para procesamiento y visualización.
 
-### Componentes Principales
-1. **Microcontrolador**: ESP32 o ESP8266
-2. **Micrófono**: INMP441 (I2S digital)
-3. **Fuente de alimentación**: 3.3V DC
-4. **Conexiones**: Cables dupont, protoboard
+## Arquitectura del Sistema
 
-### Especificaciones Técnicas
-- **Rango dinámico**: 60 dB
-- **Frecuencia de muestreo**: 16-44.1 kHz
-- **Resolución**: 24-bit
-- **Sensibilidad**: -26 dBFS
-- **Consumo**: 1.4 mA @ 1.8V
-
-## Esquema de Conexiones
-
-### ESP32
 ```
-INMP441  →  ESP32
+┌─────────────────┐     ESP-NOW     ┌─────────────────┐     MQTT     ┌─────────────────┐
+│   Sensores      │ ──────────────► │     Gateway     │ ────────────► │     Broker      │
+│   ESP32         │                 │     ESP32       │              │     MQTT        │
+│   (emisores)    │                 │   (receptor)    │              │                 │
+└─────────────────┘                 └─────────────────┘              └─────────────────┘
+        │                                   │                                 │
+        ▼                                   ▼                                 ▼
+   Captura audio                      Agrega datos                     Almacena y
+   (INMP441 I2S)                     (cada 10 segundos)               distribuye datos
+```
+
+## Archivos del Proyecto
+
+### 1. `config.example.py` - Plantilla de configuración
+
+```python
+# ===================== CONFIGURACIÓN WIFI =====================
+WIFI_SSID = "tu_ssid"
+WIFI_PASSWORD = "clave_ssid"
+
+# ===================== CONFIGURACIÓN MQTT =====================
+MQTT_BROKER = "ip_broker"
+MQTT_PORT = 1883
+MQTT_USER = ""
+MQTT_PASSWORD = ""
+MQTT_CLIENT_ID = "id_gateway"
+MQTT_TOPIC = "tu/topico"
+
+# ===================== CONFIGURACIÓN ESP32 =====================
+ESPNOW_CAPTURE_TIME = 5
+MQTT_SEND_INTERVAL = 10
+LED_PIN = 2
+
+```
+
+**Propósito**: Plantilla para crear el archivo de configuración real. Contiene las variables de configuración necesarias para WiFi y MQTT. Copialo quiental el .example y coloca tus variables reales.
+
+### 2. `esp32_sender.py` - Sensor emisor (captura de audio)
+
+**Propósito**: Código que se ejecuta en los ESP32 sensores. Captura audio del micrófono INMP441 vía I2S, calcula el nivel de decibelios y lo envía mediante ESP-NOW al gateway.
+
+**Características principales**:
+
+- Configuración del micrófono INMP441 (pines SCK=14, WS=25, SD=34)
+- Cálculo RMS del audio cada 5 segundos
+- Conversión a decibelios (dB)
+- Envío mediante ESP-NOW al gateway
+- LED indicador de envío (pin 2)
+
+**Flujo de trabajo**:
+
+1. Inicializa I2S para captura de audio
+2. Calcula RMS de las muestras durante 5 segundos
+3. Convierte RMS a dB usando referencia de 20 μPa
+4. Envía datos al gateway mediante ESP-NOW
+5. Repite cada 5 segundos
+
+### 3. `esp32_gateway.py` - Gateway central (receptor y agregador)
+
+**Propósito**: Código que se ejecuta en el ESP32 gateway. Recibe datos de múltiples sensores mediante ESP-NOW, los agrega y los envía al broker MQTT.
+
+**Características principales**:
+
+- Recepción de datos ESP-NOW de múltiples sensores
+- Agregación de datos durante 5 segundos
+- Envío consolidado cada 10 segundos vía MQTT
+- Gestión de conexiones WiFi y MQTT
+- LED indicador de estado (pin 2)
+
+**Flujo de trabajo**:
+
+1. Conecta a WiFi usando credenciales de `config.py`
+2. Captura datos ESP-NOW durante 5 segundos
+3. Agrega datos de todos los sensores detectados
+4. Cada 10 segundos, envía datos consolidados al broker MQTT
+5. Publica en el tópico `sensors/espnow/grouped_data`
+
+### 4. `mac_gateway.py` - Utilidad para obtener dirección MAC
+
+**Propósito**: Script auxiliar para obtener la dirección MAC del ESP32 gateway en formato compatible con ESP-NOW.
+
+**Uso**:
+
+1. Ejecutar en el ESP32 que será el gateway
+2. Copiar la dirección MAC mostrada
+3. Pegarla en el archivo `esp32_sender.py` como `PEER_MAC`
+
+**Salida ejemplo**:
+
+```
+MAC legible: 88:57:21:95:4d:44
+MAC hex:     885721954d44
+
+Para código ESP-NOW:
+PEER_MAC = b'\x88\x57\x21\x95\x4d\x44'
+```
+
+## Configuración del Hardware
+
+### Componentes Requeridos
+
+1. **ESP32** (tanto para sensores como gateway)
+2. **Micrófono INMP441** (solo para sensores)
+3. **Fuente de alimentación 3.3V**
+4. **Cables dupont**
+
+### Esquema de Conexiones para Sensor
+
+```
+INMP441  →  ESP32 Sensor
 -----------------
 VDD      →  3.3V
 GND      →  GND
-SD       →  GPIO32
-WS       →  GPIO25
-SCK      →  GPIO33
+SD       →  GPIO34 (entrada de datos)
+WS       →  GPIO25 (selección de palabra)
+SCK      →  GPIO14 (reloj serial)
+LED      →  GPIO2 (indicador visual)
 ```
 
-### ESP8266
+### Esquema de Conexiones para Gateway
+
 ```
-INMP441  →  ESP8266
--------------------
-VDD      →  3.3V
-GND      →  GND
-SD       →  D3 (GPIO0)
-WS       →  D4 (GPIO2)
-SCK      →  D5 (GPIO14)
+ESP32 Gateway
+-------------
+LED      →  GPIO2 (indicador de estado)
+         (No requiere micrófono INMP441)
 ```
 
-## Archivos Principales
+## Instalación y Configuración
 
-### `inmp441.py`
-Driver del micrófono INMP441. Contiene:
-- Configuración del bus I2S
-- Lectura de muestras de audio
-- Cálculo de niveles RMS
-- Calibración del micrófono
+### Paso 1: Preparar el entorno
 
-### `inmp441_sender.py`
-Script principal para envío de datos:
-- Conexión WiFi
-- Configuración MQTT
-- Lectura continua del micrófono
-- Publicación periódica de datos
-
-### `inmp441_gateway.py`
-Gateway para múltiples sensores:
-- Agregación de datos de varios ESP
-- Envío consolidado vía MQTT
-- Gestión de conexiones
-
-### `config.example.py`
-Plantilla de configuración:
-- Credenciales WiFi
-- Configuración MQTT
-- Parámetros de medición
-
-## Configuración
-
-### 1. Preparar el Entorno
 ```bash
-# Instalar esptool para flashear
-pip install esptool
+# Instalar herramientas necesarias
+pip install esptool adafruit-ampy
 
-# Instalar ampy para transferencia de archivos
-pip install adafruit-ampy
-```
-
-### 2. Flashear MicroPython
-```bash
-# Para ESP32
+# Flashear MicroPython en ESP32
 esptool.py --chip esp32 --port /dev/ttyUSB0 erase_flash
 esptool.py --chip esp32 --port /dev/ttyUSB0 write_flash -z 0x1000 esp32-20220117-v1.18.bin
-
-# Para ESP8266
-esptool.py --chip esp8266 --port /dev/ttyUSB0 erase_flash
-esptool.py --chip esp8266 --port /dev/ttyUSB0 write_flash -z 0x0 esp8266-20220117-v1.18.bin
 ```
 
-### 3. Configurar Credenciales
-```python
-# Copiar y editar config.example.py
-cp config.example.py config.py
+### Paso 2: Configurar el Gateway
 
-# Editar config.py con tus credenciales
-WIFI_SSID = "tu_red_wifi"
-WIFI_PASSWORD = "tu_contraseña"
-MQTT_BROKER = "192.168.1.100"
-MQTT_PORT = 1883
+1. **Subir archivos al gateway**:
+
+   ```bash
+   ampy --port /dev/ttyUSB0 put config.py
+   ampy --port /dev/ttyUSB0 put esp32_gateway.py
+   ampy --port /dev/ttyUSB0 put mac_gateway.py
+   ```
+
+2. **Obtener dirección MAC del gateway**:
+   ```bash
+   ampy --port /dev/ttyUSB0 run mac_gateway.py
+   ```
+   Copiar la dirección MAC mostrada.
+
+### Paso 3: Configurar los Sensores
+
+1. **Actualizar dirección MAC en sensores**:
+   Editar `esp32_sender.py` y actualizar `PEER_MAC` con la dirección obtenida del gateway.
+
+2. **Subir archivos a cada sensor**:
+
+   ```bash
+   ampy --port /dev/ttyUSB1 put esp32_sender.py
+   ```
+
+3. **Para cada sensor, asignar un ID único**:
+   Editar `MICRO_ID` en `esp32_sender.py` (ej: "E1", "E2", "E3", etc.)
+
+### Paso 4: Ejecutar el Sistema
+
+1. **Iniciar gateway primero**:
+
+   ```bash
+   ampy --port /dev/ttyUSB0 run esp32_gateway.py
+   ```
+
+2. **Iniciar sensores después**:
+   ```bash
+   ampy --port /dev/ttyUSB1 run esp32_sender.py
+   ```
+
+## Formato de Datos
+
+### Mensaje ESP-NOW (sensor → gateway)
+
+```
+E1:65.5
 ```
 
-### 4. Subir Código al ESP
-```bash
-# Subir archivos
-ampy --port /dev/ttyUSB0 put inmp441.py
-ampy --port /dev/ttyUSB0 put config.py
-ampy --port /dev/ttyUSB0 put inmp441_sender.py
+Donde:
 
-# Ejecutar script principal
-ampy --port /dev/ttyUSB0 run inmp441_sender.py
-```
+- `E1`: ID del sensor
+- `65.5`: Valor en decibelios
 
-## Parámetros de Medición
+### Mensaje MQTT (gateway → broker)
 
-### Configuración por Defecto
-```python
-SAMPLE_RATE = 44100          # Hz
-BUFFER_SIZE = 1024           # muestras
-MEASUREMENT_INTERVAL = 5     # segundos
-CALIBRATION_OFFSET = 0.0     # dB
-```
-
-### Ajustes Recomendados
-- **Ambiente interior**: Ganancia media, intervalo 5s
-- **Exterior ruidoso**: Ganancia baja, intervalo 2s
-- **Precisión alta**: Buffer grande (2048), intervalo 10s
-
-## Protocolo de Datos MQTT
-
-### Estructura del Mensaje
 ```json
 {
-  "micro_id": "E1",
-  "timestamp": "2024-01-15T10:30:00Z",
-  "value": 65.5,
-  "unit": "dB",
-  "location": "Exterior 1",
-  "battery": 3.7
+  "timestamp": 1676543210,
+  "sensors": [
+    { "micro_id": "E1", "value": 65.5, "sample": 1 },
+    { "micro_id": "E1", "value": 64.8, "sample": 2 },
+    { "micro_id": "E2", "value": 62.3, "sample": 1 }
+  ]
 }
 ```
 
-### Tópicos
-- **Datos individuales**: `sensors/espnow/E1/data`
+### Tópicos MQTT
+
 - **Datos agrupados**: `sensors/espnow/grouped_data`
-- **Estado**: `sensors/espnow/E1/status`
 
-## Calibración
+## Calibración del Sistema
 
-### Método de Calibración
-1. **Medición de línea base**: Ambiente silencioso (30-40 dB)
-2. **Fuente de referencia**: Calibrador acústico a 94 dB
-3. **Ajuste de ganancia**: Modificar `CALIBRATION_OFFSET`
+### Calibración de decibelios
 
-### Script de Calibración
-```python
-# Ejecutar en REPL de MicroPython
-import inmp441
-mic = inmp441.INMP441()
+El cálculo de dB se basa en:
 
-# Medir nivel de referencia
-reference_level = mic.measure_reference(94.0)
+1. Voltaje RMS de la señal de audio
+2. Referencia de presión sonora: 20 μPa (umbral de audición humana)
+3. Sensibilidad del INMP441: -26 dBFS
 
-# Calcular offset
-calibration_offset = 94.0 - reference_level
-print(f"Offset de calibración: {calibration_offset:.2f} dB")
-```
+### Ajuste de sensibilidad
+
+Para calibrar el sistema:
+
+1. Usar un calibrador acústico de 94 dB
+2. Medir el valor reportado por el sensor
+3. Ajustar la fórmula de conversión en `esp32_sender.py`
 
 ## Solución de Problemas
 
 ### Problemas Comunes
 
-#### No hay conexión WiFi
-1. Verificar SSID y contraseña
-2. Comprobar señal WiFi
-3. Reiniciar ESP
+#### 1. No hay comunicación ESP-NOW
 
-#### No se envían datos MQTT
-1. Verificar broker MQTT
-2. Comprobar tópicos
-3. Revisar formato JSON
+- Verificar que `PEER_MAC` en sensores coincida con la MAC real del gateway
+- Asegurar que los dispositivos estén dentro del rango (≈100m en espacio abierto)
+- Verificar que el gateway esté ejecutándose antes que los sensores
 
-#### Lecturas inconsistentes
-1. Verificar conexiones hardware
-2. Calibrar micrófono
-3. Ajustar ganancia
+#### 2. No se envían datos MQTT
+
+- Verificar conexión WiFi en gateway
+- Confirmar que `config.py` tiene las credenciales correctas
+- Verificar que el broker MQTT esté accesible desde la red
+
+#### 3. Lecturas inconsistentes
+
+- Verificar conexiones del micrófono INMP441
+- Asegurar alimentación estable de 3.3V
+- Verificar pines I2S configurados correctamente
 
 ### Diagnóstico
+
 ```python
-# Script de diagnóstico
+# En REPL de MicroPython
 import network
 import time
 
 # Verificar WiFi
 wlan = network.WLAN(network.STA_IF)
-print(f"WiFi conectado: {wlan.isconnected()}")
+print(f"Conectado: {wlan.isconnected()}")
 print(f"IP: {wlan.ifconfig()[0]}")
 
 # Verificar memoria
@@ -205,80 +278,89 @@ import gc
 print(f"Memoria libre: {gc.mem_free()} bytes")
 ```
 
-## Optimización
+## Optimizaciones
 
 ### Consumo de Energía
-```python
-# Modo bajo consumo
-import machine
-import esp
 
-# Dormir entre mediciones
-esp.sleep_type(esp.SLEEP_LIGHT)
-machine.deepsleep(5000)  # 5 segundos
+Para aplicaciones con batería:
+
+```python
+# En esp32_sender.py, agregar después del envío
+import machine
+machine.deepsleep(5000)  # Dormir 5 segundos entre mediciones
 ```
 
-### Almacenamiento Local
-```python
-# Guardar datos en SPIFFS en caso de desconexión
-import uos
-import json
+### Almacenamiento en Fallo
 
-def save_to_spiffs(data):
-    with open('/data/backup.json', 'a') as f:
-        f.write(json.dumps(data) + '\n')
+Para manejar desconexiones del gateway:
+
+```python
+# En esp32_sender.py, agregar buffer local
+buffer_datos = []
+MAX_BUFFER = 100  # Máximo de lecturas en buffer
+
+def guardar_en_buffer(dato):
+    if len(buffer_datos) >= MAX_BUFFER:
+        buffer_datos.pop(0)
+    buffer_datos.append(dato)
 ```
 
 ## Seguridad
 
 ### Recomendaciones
-1. **WiFi**: WPA2 o superior
-2. **MQTT**: Autenticación con usuario/contraseña
-3. **Datos**: Encriptación TLS si es posible
-4. **Actualizaciones**: Firmware actualizado
 
-### Configuración Segura
+1. **WiFi**: Usar red WPA2 o superior
+2. **MQTT**: Implementar autenticación si el broker lo soporta
+3. **Datos**: Considerar encriptación TLS para MQTT en producción
+4. **IDs**: Usar IDs únicos para cada sensor
+
+### Configuración Segura MQTT
+
 ```python
-# Usar MQTT con TLS
-import ssl
-ssl_context = ssl.create_default_context()
-
-# Autenticación MQTT
-MQTT_USER = "usuario"
-MQTT_PASSWORD = "contraseña_segura"
+# En config.py para producción
+MQTT_USER = "usuario_seguro"
+MQTT_PASSWORD = "contraseña_fuerte"
+# Considerar broker con TLS
+MQTT_BROKER = "mqtts://broker.seguro.com"
+MQTT_PORT = 8883
 ```
 
-## Contribución
+## Escalabilidad
 
-### Desarrollo
-1. Clonar repositorio
-2. Crear rama de características
-3. Implementar cambios
-4. Probar en hardware real
-5. Crear Pull Request
+### Máximo número de sensores
 
-### Pruebas
-- Verificar en diferentes ESP32/ESP8266
-- Probar en diversos entornos acústicos
-- Validar consumo de energía
-- Verificar estabilidad a largo plazo
+- **ESP-NOW**: Soporta hasta 20 pares simultáneos
+- **Gateway**: Puede manejar múltiples sensores (limitado por ancho de banda ESP-NOW)
+- **Intervalos**: Ajustar `MEASUREMENT_INTERVAL` según número de sensores
+
+### Para más de 10 sensores
+
+1. Aumentar intervalo de envío a 10 segundos
+2. Usar múltiples gateways
+3. Implementar canales ESP-NOW diferentes
 
 ## Referencias
 
-### Documentación
-- [MicroPython Documentation](https://docs.micropython.org/)
-- [ESP32 Datasheet](https://www.espressif.com/en/products/socs/esp32)
+### Documentación Técnica
+
+- [MicroPython ESP-NOW](https://docs.micropython.org/en/latest/esp32/quickref.html#esp-now)
 - [INMP441 Datasheet](https://www.infineon.com/cms/en/product/sensor/mems-microphones/mems-microphones-for-consumer/inmp441/)
+- [ESP32 Technical Reference](https://www.espressif.com/en/products/socs/esp32)
 
 ### Herramientas
-- [Thonny IDE](https://thonny.org/)
-- [MQTT Explorer](http://mqtt-explorer.com/)
-- [esptool](https://github.com/espressif/esptool)
 
-### Comunidad
+- [Thonny IDE](https://thonny.org/) - IDE recomendado para MicroPython
+- [MQTT Explorer](http://mqtt-explorer.com/) - Cliente MQTT para debugging
+- [esptool](https://github.com/espressif/esptool) - Herramienta oficial para flashear
+
+### Comunidades
+
 - [MicroPython Forum](https://forum.micropython.org/)
-- [ESP32 Forum](https://www.esp32.com/)
+- [ESP32 Official Forum](https://www.esp32.com/)
 - [Home Assistant Community](https://community.home-assistant.io/)
 
 ---
-*Última actualización: Febrero 2026*
+
+**Nota Importante**: El archivo `config.py` con los datos del broker MQTT **DEBE** estar presente en el ESP32 gateway para que el sistema funcione correctamente. Este archivo contiene las credenciales WiFi y la configuración MQTT necesaria para la comunicación.
+
+**Última actualización**: Marzo 2024
