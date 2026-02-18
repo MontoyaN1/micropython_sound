@@ -5,6 +5,7 @@
 Sistema IoT para monitoreo y visualización de niveles de ruido en tiempo real, desarrollado como proyecto de tesis de grado. El sistema integra dispositivos MicroPython (ESP32/ESP8266) con micrófonos INMP441, procesamiento de datos con Node-RED, almacenamiento en InfluxDB, y visualización mediante una interfaz web React con mapas de calor interactivos.
 
 ### Objetivos Principales
+
 1. **Monitoreo en tiempo real** de niveles de ruido ambiental
 2. **Visualización espacial** mediante mapas de calor (heatmaps)
 3. **Almacenamiento histórico** para análisis temporal
@@ -14,6 +15,7 @@ Sistema IoT para monitoreo y visualización de niveles de ruido en tiempo real, 
 ## Arquitectura del Sistema
 
 ### Diagrama de Componentes
+
 ```
 ┌─────────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
 │   Sensores      │    │   Broker    │    │  Procesa-   │    │  Almacena-  │
@@ -35,6 +37,7 @@ Sistema IoT para monitoreo y visualización de niveles de ruido en tiempo real, 
 ```
 
 ### Flujo de Datos
+
 1. **Adquisición**: Sensores ESP32/ESP8266 con micrófonos INMP441 capturan niveles de sonido
 2. **Transmisión**: Datos enviados vía WiFi al broker MQTT (EMQX)
 3. **Procesamiento**: Node-RED recibe, valida y transforma los datos
@@ -48,13 +51,12 @@ Sistema IoT para monitoreo y visualización de niveles de ruido en tiempo real, 
 ```
 micropython_sound/
 ├── sensor/                 # Código para dispositivos ESP32/ESP8266
-│   ├── inmp441.py         # Driver del micrófono INMP441 (I2S)
-│   ├── inmp441_sender.py  # Script principal para envío de datos MQTT
-│   ├── inmp441_gateway.py # Gateway para múltiples sensores
-│   ├── inmp441_gateway debug.py # Versión de depuración
-│   ├── mac_gateway.py     # Gateway basado en direcciones MAC
+│   ├── esp32_sender.py    # Sensor emisor - Captura audio y envía via ESP-NOW
+│   ├── esp32_gateway.py   # Gateway receptor - Recibe ESP-NOW y envía MQTT
+│   ├── mac_gateway.py     # Utilidad para obtener dirección MAC del gateway
+│   ├── config.py          # Configuración real (credenciales WiFi y MQTT)
 │   ├── config.example.py  # Plantilla de configuración
-│   └── README.md          # Documentación de hardware y configuración
+│   └── README.md          # Documentación completa del sistema de sensores
 │
 ├── backend/               # Backend FastAPI (Python)
 │   ├── app/
@@ -168,24 +170,28 @@ micropython_sound/
 ### Arquitectura Tecnológica
 
 #### Capa de Hardware
+
 - **Microcontroladores**: ESP32 / ESP8266
 - **Sensores**: Micrófonos INMP441 (I2S)
 - **Comunicación**: WiFi 802.11n
 - **Protocolo**: MQTT sobre TCP/IP
 
 #### Capa de Middleware
+
 - **Broker MQTT**: EMQX
 - **Procesamiento**: Node-RED
 - **Orquestación**: Docker Compose
 - **Cache**: DragonflyDB (Redis-compatible)
 
 #### Capa de Backend
+
 - **Framework**: FastAPI (Python 3.9+)
 - **Base de datos**: InfluxDB (series temporales)
 - **Comunicación**: WebSocket, REST API
 - **Algoritmos**: Interpolación IDW, cálculo de epicentro
 
 #### Capa de Frontend
+
 - **Framework**: React 18
 - **Mapas**: Leaflet + Leaflet.heat
 - **Estilos**: TailwindCSS
@@ -195,6 +201,7 @@ micropython_sound/
 ### Dependencias Principales
 
 #### Backend (Python)
+
 - FastAPI >= 0.104.0
 - Pydantic >= 2.5.0
 - InfluxDB-client >= 1.40.0
@@ -203,6 +210,7 @@ micropython_sound/
 - NumPy >= 1.24.0 (para cálculos IDW)
 
 #### Frontend (JavaScript)
+
 - React >= 18.2.0
 - React DOM >= 18.2.0
 - React Leaflet >= 4.2.1
@@ -215,12 +223,14 @@ micropython_sound/
 ## Convenciones del Proyecto
 
 ### Nomenclatura
+
 - **Archivos Python**: snake_case.py
 - **Archivos JavaScript**: camelCase.js/jsx
 - **Componentes React**: PascalCase.jsx
 - **Variables**: descriptivas en inglés
 
 ### Estructura de Commits
+
 ```
 feat: nueva funcionalidad
 fix: corrección de bug
@@ -232,6 +242,7 @@ chore: tareas de mantenimiento
 ```
 
 ### Documentación
+
 - Cada carpeta principal tiene su README.md
 - Comentarios en código explicando lógica compleja
 - Documentación académica en `doc/`
@@ -240,11 +251,13 @@ chore: tareas de mantenimiento
 ## Requisitos del Sistema
 
 ### Hardware
+
 - **Sensores**: ESP32 o ESP8266 con micrófono INMP441
 - **Servidor**: Mínimo 2GB RAM, 2 vCPU (recomendado 4GB RAM, 4 vCPU)
 - **Red**: Conexión WiFi para sensores, red estable para servidor
 
 ### Software
+
 - **Docker** y **Docker Compose** para despliegue
 - **Python 3.9+** para desarrollo
 - **Node.js 18+** para frontend
@@ -253,46 +266,53 @@ chore: tareas de mantenimiento
 ## Instalación y Configuración
 
 ### 1. Clonar el Repositorio
+
 ```bash
 git clone <url-del-repositorio>
 cd micropython_sound
 ```
 
 ### 2. Configurar Variables de Entorno
+
 ```bash
 cp .env.example .env
 # Editar .env con tus credenciales
 ```
 
 Variables esenciales:
+
 ```env
-# InfluxDB
-INFLUXDB_TOKEN=tu_token_aqui
-INFLUXDB_URL=http://localhost:8086
-INFLUXDB_ORG=tu_organizacion
-INFLUXDB_BUCKET=sensores
+# Configuracion de influxdb
+INFLUXDB_TOKEN=tu_token
+INFLUXDB_ORG=tu_org
+INFLUXDB_BUCKET=tu_bucket
 
-# MQTT/EMQX
-MQTT_BROKER=ip_o_dominio_mqtt
+
+#Congiruacion de broker
+MQTT_BROKER="ip_broker_host"
 MQTT_PORT=1883
-MQTT_TOPIC=sensors/espnow/grouped_data
+MQTT_TOPIC=tu/topico
 
-# Frontend
-VITE_API_URL=http://localhost:8000
+# Frontend React
+VITE_API_URL=/api
+
 ```
 
 ### 3. Configurar Ubicación de Sensores
+
 Editar `location/sensores.yaml` con las coordenadas de tus sensores:
+
 ```yaml
 microcontrollers:
   micro_E1:
-    location: [1.5, 3]      # [x, y] en metros
+    location: [1.5, 3] # [x, y] en metros
     coordinates_type: "relative"
     room: "Exterior 1"
   # ... más sensores
 ```
 
 ### 4. Desplegar con Docker Compose
+
 ```bash
 # Desarrollo
 ./deploy.sh start dev
@@ -302,6 +322,7 @@ microcontrollers:
 ```
 
 ### 5. Acceder a la Aplicación
+
 - **Frontend**: http://localhost:3000
 - **Backend API**: http://localhost:8000
 - **Health Check**: http://localhost:8000/health
@@ -310,28 +331,54 @@ microcontrollers:
 ## Configuración de Sensores
 
 ### Hardware Requerido
-1. **ESP32 o ESP8266**
-2. **Micrófono INMP441** (I2S)
-3. **Conexiones**:
+
+1. **ESP32** (tanto para sensores como para gateway)
+2. **Micrófono INMP441** (solo para sensores emisores)
+3. **Conexiones para sensores**:
    - VDD: 3.3V
    - GND: Tierra
-   - SD: GPIO32 (ESP32) / D3 (ESP8266)
-   - WS: GPIO25 (ESP32) / D4 (ESP8266)
-   - SCK: GPIO33 (ESP32) / D5 (ESP8266)
+   - SD: GPIO34 (entrada de datos)
+   - WS: GPIO25 (selección de palabra)
+   - SCK: GPIO14 (reloj serial)
+   - LED: GPIO2 (indicador visual)
+4. **Conexiones para gateway**:
+   - LED: GPIO2 (indicador de estado)
+   - (No requiere micrófono INMP441)
 
-### Configuración del Código
-1. Copiar `sensor/config.example.py` a `config.py`
-2. Configurar credenciales WiFi y MQTT
-3. Subir código al ESP32 usando Thonny o esptool
+### Configuración del Sistema
 
-### Calibración
-1. Ejecutar medición en ambiente silencioso para línea base
-2. Ajustar ganancia según rango esperado (40-100 dB)
-3. Verificar transmisión MQTT con herramienta como MQTT Explorer
+1. **Configurar gateway**:
+   - Subir `sensor/config.py` y `sensor/esp32_gateway.py` al ESP32 gateway
+   - Ejecutar `sensor/mac_gateway.py` para obtener dirección MAC del gateway
+   - Copiar la dirección MAC mostrada
+
+2. **Configurar sensores**:
+   - Editar `sensor/esp32_sender.py` y actualizar `PEER_MAC` con la dirección del gateway
+   - Asignar un `MICRO_ID` único a cada sensor (ej: "E1", "E2", "E3")
+   - Subir `sensor/esp32_sender.py` a cada ESP32 sensor
+
+3. **Archivo config.py en gateway**:
+   - **IMPORTANTE**: El archivo `sensor/config.py` con los datos del broker MQTT DEBE estar presente en el ESP32 gateway
+   - Contiene credenciales WiFi: `WIFI_SSID` y `WIFI_PASSWORD`
+   - Contiene configuración MQTT: `MQTT_BROKER` y `MQTT_PORT`
+   - Opcionalmente puede incluir autenticación MQTT: `MQTT_USER` y `MQTT_PASSWORD`
+
+### Protocolo de Comunicación
+
+1. **ESP-NOW**: Sensores envían datos al gateway cada 5 segundos
+2. **MQTT**: Gateway agrega datos y los envía al broker cada 10 segundos
+3. **Tópico MQTT**: `sensors/espnow/grouped_data`
+
+### Verificación
+
+1. Ejecutar gateway primero: `ampy --port /dev/ttyUSB0 run esp32_gateway.py`
+2. Ejecutar sensores después: `ampy --port /dev/ttyUSB1 run esp32_sender.py`
+3. Verificar datos en broker MQTT usando MQTT Explorer
 
 ## Procesamiento con Node-RED
 
 ### Flujo Principal
+
 1. **Recepción MQTT**: Suscripción a `sensors/espnow/grouped_data`
 2. **Validación**: Verificar formato y rangos de datos
 3. **Transformación**: Convertir a formato InfluxDB Line Protocol
@@ -339,6 +386,7 @@ microcontrollers:
 5. **Logging**: Registrar eventos para monitoreo
 
 ### Configuración
+
 1. Importar `node_red/flow.json` en Node-RED
 2. Configurar credenciales MQTT e InfluxDB
 3. Ajustar tópicos según configuración de sensores
@@ -347,6 +395,7 @@ microcontrollers:
 ## Backend FastAPI
 
 ### Características
+
 - **API REST** para datos históricos
 - **WebSocket** para datos en tiempo real
 - **Cliente MQTT** integrado
@@ -354,6 +403,7 @@ microcontrollers:
 - **Interpolación IDW** para mapas de calor
 
 ### Endpoints Principales
+
 - `GET /health` - Estado del sistema
 - `GET /api/sensors` - Lista de sensores
 - `GET /api/data/recent` - Datos recientes
@@ -363,12 +413,14 @@ microcontrollers:
 ## Frontend React
 
 ### Componentes Principales
+
 1. **RealTimeMap** - Mapa con heatmap en tiempo real
 2. **FloorPlanMap** - Plano interior con visualización detallada
 3. **HistoricalPage** - Análisis de datos históricos
 4. **ControlPanel** - Controles de visualización
 
 ### Tecnologías Utilizadas
+
 - **React 18** con hooks
 - **Leaflet** para mapas interactivos
 - **Leaflet.heat** para heatmaps
@@ -380,9 +432,11 @@ microcontrollers:
 ## Algoritmo de Interpolación IDW
 
 ### Descripción
+
 Inverse Distance Weighting (IDW) es un método de interpolación espacial que asigna valores a puntos no muestreados basándose en la distancia a puntos conocidos.
 
 ### Implementación
+
 ```python
 def idw_interpolation(points, grid_resolution=0.5, power=2):
     """
@@ -397,6 +451,7 @@ def idw_interpolation(points, grid_resolution=0.5, power=2):
 ```
 
 ### Parámetros Ajustables
+
 - **Power (p)**: Controla la influencia de puntos distantes (p=2 recomendado)
 - **Radio de influencia**: Distancia máxima para considerar un punto
 - **Resolución de grilla**: Detalle del mapa de calor
@@ -404,25 +459,29 @@ def idw_interpolation(points, grid_resolution=0.5, power=2):
 ## Despliegue en Producción
 
 ### Opción 1: Docker Compose (Autónomo)
+
 ```bash
 ./deploy.sh start prod
 ./deploy.sh status prod
 ```
 
 ### Opción 2: EasyPanel (Recomendado)
+
 Ver guía completa en [EASYPANEL_SETUP.md](EASYPANEL_SETUP.md)
 
 ### Requisitos de Recursos
-| Servicio     | CPU  | RAM   | Disco  |
-|--------------|------|-------|--------|
-| Backend      | 0.5  | 512MB | 100MB  |
-| Frontend     | 0.25 | 256MB | 50MB   |
-| Cache        | 0.5  | 512MB | 100MB  |
-| **Total**    | 1.25 | 1.25GB| 250MB  |
+
+| Servicio  | CPU  | RAM    | Disco |
+| --------- | ---- | ------ | ----- |
+| Backend   | 0.5  | 512MB  | 100MB |
+| Frontend  | 0.25 | 256MB  | 50MB  |
+| Cache     | 0.5  | 512MB  | 100MB |
+| **Total** | 1.25 | 1.25GB | 250MB |
 
 ## Pruebas y Validación
 
 ### Pruebas Unitarias
+
 ```bash
 # Backend
 cd backend
@@ -434,12 +493,14 @@ npm test
 ```
 
 ### Validación de Datos
+
 1. **Rangos**: 40-120 dB (audible)
 2. **Frecuencia**: Muestreo cada 100ms
 3. **Precisión**: ±2 dB
 4. **Latencia**: < 5 segundos end-to-end
 
 ### Pruebas de Integración
+
 1. **Flujo completo**: Sensor → MQTT → Node-RED → InfluxDB → Frontend
 2. **WebSocket**: Conexión y actualizaciones en tiempo real
 3. **API REST**: Consultas históricas y estado
@@ -447,18 +508,21 @@ npm test
 ## Mantenimiento y Monitoreo
 
 ### Métricas Clave
+
 1. **Disponibilidad**: Uptime > 99.5%
 2. **Latencia**: < 5s sensor a visualización
 3. **Precisión**: Error < ±3 dB
 4. **Capacidad**: Hasta 50 sensores simultáneos
 
 ### Logs y Monitoreo
+
 - **Backend**: Logs en `backend/app.log`
 - **Frontend**: Console del navegador
 - **Docker**: `docker-compose logs`
 - **Health Checks**: Endpoint `/health`
 
 ### Backup
+
 1. **Configuración**: Script `./deploy.sh backup`
 2. **Datos**: Export periódico de InfluxDB
 3. **Código**: Repositorio Git
@@ -468,24 +532,28 @@ npm test
 ### Problemas Comunes
 
 #### Sensores no envían datos
+
 1. Verificar conexión WiFi
 2. Comprobar broker MQTT
 3. Revisar tópicos de publicación
 4. Verificar alimentación y conexiones hardware
 
 #### Datos no aparecen en frontend
+
 1. Verificar conexión WebSocket
 2. Comprobar API backend (`/health`)
 3. Revisar consola del navegador
 4. Verificar datos en InfluxDB
 
 #### Mapa de calor no se muestra
+
 1. Verificar carga de `plano.png`
 2. Comprobar datos IDW del backend
 3. Revisar configuración de sensores
 4. Verificar interpolación IDW
 
 ### Herramientas de Diagnóstico
+
 - **MQTT**: Mosquitto client o MQTT Explorer
 - **InfluxDB**: CLI o Chronograf
 - **Red**: `curl` para API, `websocat` para WebSocket
@@ -494,6 +562,7 @@ npm test
 ## Contribución al Proyecto
 
 ### Para Desarrolladores
+
 1. Fork del repositorio
 2. Crear rama de características
 3. Implementar cambios
@@ -501,12 +570,14 @@ npm test
 5. Crear Pull Request
 
 ### Estándares de Código
+
 - **Python**: PEP 8, type hints
 - **JavaScript**: ESLint, Prettier
 - **Commits**: Conventional Commits
 - **Documentación**: Actualizar READMEs correspondientes
 
 ### Roadmap de Desarrollo
+
 1. **Fase 1**: Sistema básico funcional ✓
 2. **Fase 2**: Optimización y escalabilidad ✓
 3. **Fase 3**: Análisis avanzado (ML) ⏳
@@ -515,18 +586,21 @@ npm test
 ## Aspectos Académicos
 
 ### Contribución a la Investigación
+
 1. **Metodología**: Sistema IoT para monitoreo ambiental
 2. **Innovación**: Interpolación IDW para visualización espacial
 3. **Aplicación**: Monitoreo de contaminación acústica urbana
 4. **Escalabilidad**: Arquitectura modular para expansión
 
 ### Aplicaciones Prácticas
+
 1. **Monitoreo urbano**: Contaminación acústica en ciudades
 2. **Industrial**: Niveles de ruido en fábricas
 3. **Educacional**: Concienciación ambiental
 4. **Investigación**: Estudios de acústica ambiental
 
 ### Limitaciones y Trabajo Futuro
+
 1. **Calibración automática** de sensores
 2. **Análisis predictivo** con machine learning
 3. **Integración** con sistemas de alerta temprana
@@ -535,9 +609,11 @@ npm test
 ## Licencia y Atribución
 
 ### Licencia
+
 Este proyecto se distribuye bajo la licencia MIT. Ver archivo [LICENSE](LICENSE) para detalles.
 
 ### Atribución
+
 - **MicroPython**: https://micropython.org
 - **INMP441**: Infineon Technologies
 - **React**: Facebook Open Source
@@ -546,25 +622,29 @@ Este proyecto se distribuye bajo la licencia MIT. Ver archivo [LICENSE](LICENSE)
 - **InfluxDB**: InfluxData
 
 ### Cita Académica
+
 ```
-[Sistema de Monitoreo Acústico en Tiempo Real]. (2024). 
+[Sistema de Monitoreo Acústico en Tiempo Real]. (2024).
 Proyecto de Tesis de Grado. Universidad [Nombre de la Universidad].
 ```
 
 ## Mantenimiento y Escalabilidad
 
 ### Monitoreo
+
 - Health checks: `GET /health`
 - Logs estructurados por servicio
 - Métricas de rendimiento en backend
 
 ### Escalabilidad Horizontal
+
 - Sensores: Agregar nuevos en `sensores.yaml`
 - Backend: Replicar con balanceador de carga
 - Base de datos: InfluxDB clustering
 - Cache: DragonflyDB en cluster
 
 ### Backup y Recuperación
+
 - Configuración: Script `./deploy.sh backup`
 - Datos: Export periódico de InfluxDB
 - Código: Repositorio Git con tags
@@ -572,6 +652,7 @@ Proyecto de Tesis de Grado. Universidad [Nombre de la Universidad].
 ## Contribución al Proyecto
 
 ### Para Desarrolladores
+
 1. Fork del repositorio
 2. Crear rama de características
 3. Implementar cambios con pruebas
@@ -579,12 +660,14 @@ Proyecto de Tesis de Grado. Universidad [Nombre de la Universidad].
 5. Crear Pull Request
 
 ### Para Investigadores Académicos
+
 1. Revisar documentación en `doc/`
 2. Replicar sistema siguiendo guías
 3. Extender según necesidades de investigación
 4. Contribuir con hallazgos y mejoras
 
 ### Para Usuarios Finales
+
 1. Seguir guía de despliegue en `README.md`
 2. Configurar según entorno específico
 3. Reportar issues en el repositorio
@@ -593,13 +676,17 @@ Proyecto de Tesis de Grado. Universidad [Nombre de la Universidad].
 ## Contacto y Soporte
 
 ### Autor
+
 Juan Pablo Montoya Valencia - juanpablomontoyajpmv@gmail.com
 
 ### Supervisión
-Anderson Páez Chanagá 
+
+Anderson Páez Chanagá
+
 ### Repositorio
+
 https://github.com/MontoyaN1/micropython_sound.git
 
 ---
 
-*Este proyecto fue desarrollado como parte de los requisitos para la obtención del título de Técnologo en Desarrollo de Sistemas Informáticos en nombre de Unidades Tecnológicas de Santander.*
+_Este proyecto fue desarrollado como parte de los requisitos para la obtención del título de Técnologo en Desarrollo de Sistemas Informáticos en nombre de Unidades Tecnológicas de Santander._

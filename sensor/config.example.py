@@ -1,9 +1,16 @@
-WIFI_SSID = "tu_ssid_aqui"
-WIFI_PASSWORD = "tu_password_aqui"
-MQTT_BROKER = "broker.hivemq.com"
+# ===================== CONFIGURACIÓN WIFI =====================
+WIFI_SSID = "tu_ssid"
+WIFI_PASSWORD = "clave_ssid"
+
+# ===================== CONFIGURACIÓN MQTT =====================
+MQTT_BROKER = "ip_broker"
 MQTT_PORT = 1883
+MQTT_USER = ""
+MQTT_PASSWORD = ""
+MQTT_CLIENT_ID = "id_gateway"
+MQTT_TOPIC = "tu/topico"
 
-
-MQTT_USER = "usuario"
-MQTT_PASSWORD = "password"
-CLIENT_ID = "dispositivo_01"
+# ===================== CONFIGURACIÓN ESP32 =====================
+ESPNOW_CAPTURE_TIME = 5
+MQTT_SEND_INTERVAL = 10
+LED_PIN = 2
