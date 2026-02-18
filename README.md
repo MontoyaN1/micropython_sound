@@ -367,7 +367,7 @@ microcontrollers:
 
 1. **ESP-NOW**: Sensores envían datos al gateway cada 5 segundos
 2. **MQTT**: Gateway agrega datos y los envía al broker cada 10 segundos
-3. **Tópico MQTT**: `sensors/espnow/grouped_data`
+3. **Tópico MQTT**: `tu/topico`
 
 ### Verificación
 
@@ -379,7 +379,7 @@ microcontrollers:
 
 ### Flujo Principal
 
-1. **Recepción MQTT**: Suscripción a `sensors/espnow/grouped_data`
+1. **Recepción MQTT**: Suscripción a `tu/topico`
 2. **Validación**: Verificar formato y rangos de datos
 3. **Transformación**: Convertir a formato InfluxDB Line Protocol
 4. **Envío**: Almacenar en InfluxDB
@@ -465,11 +465,11 @@ def idw_interpolation(points, grid_resolution=0.5, power=2):
 ./deploy.sh status prod
 ```
 
-### Opción 2: EasyPanel (Recomendado)
+### Opción 2: Saas (Recomendado)
 
-Ver guía completa en [EASYPANEL_SETUP.md](EASYPANEL_SETUP.md)
+Para el caso se utilizó EasyPanel con la plantilla de Compose, otras opciones que tengan dicho soporte también son viables como Dockploy, Coolify, entre otros.
 
-### Requisitos de Recursos
+### Requisitos de Recursos (Mínimos)
 
 | Servicio  | CPU  | RAM    | Disco |
 | --------- | ---- | ------ | ----- |
@@ -477,6 +477,15 @@ Ver guía completa en [EASYPANEL_SETUP.md](EASYPANEL_SETUP.md)
 | Frontend  | 0.25 | 256MB  | 50MB  |
 | Cache     | 0.5  | 512MB  | 100MB |
 | **Total** | 1.25 | 1.25GB | 250MB |
+
+### Requisitos de Recursos (Reconmendados)
+
+| Servicio  | CPU | RAM   | Disco  |
+| --------- | --- | ----- | ------ |
+| Backend   | 1.0 | 1Gb   | 1Gb    |
+| Frontend  | 1.0 | 1Gb   | 500MB  |
+| Cache     | 0.5 | 512MB | 150MB  |
+| **Total** | 2.5 | 2.5GB | 1.75Gb |
 
 ## Pruebas y Validación
 
@@ -648,30 +657,6 @@ Proyecto de Tesis de Grado. Universidad [Nombre de la Universidad].
 - Configuración: Script `./deploy.sh backup`
 - Datos: Export periódico de InfluxDB
 - Código: Repositorio Git con tags
-
-## Contribución al Proyecto
-
-### Para Desarrolladores
-
-1. Fork del repositorio
-2. Crear rama de características
-3. Implementar cambios con pruebas
-4. Actualizar documentación
-5. Crear Pull Request
-
-### Para Investigadores Académicos
-
-1. Revisar documentación en `doc/`
-2. Replicar sistema siguiendo guías
-3. Extender según necesidades de investigación
-4. Contribuir con hallazgos y mejoras
-
-### Para Usuarios Finales
-
-1. Seguir guía de despliegue en `README.md`
-2. Configurar según entorno específico
-3. Reportar issues en el repositorio
-4. Contribuir con casos de uso
 
 ## Contacto y Soporte
 
