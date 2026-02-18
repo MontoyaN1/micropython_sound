@@ -478,7 +478,7 @@ Para el caso se utilizó EasyPanel con la plantilla de Compose, otras opciones q
 | Cache     | 0.5  | 512MB  | 100MB |
 | **Total** | 1.25 | 1.25GB | 250MB |
 
-### Requisitos de Recursos (Reconmendados)
+### Requisitos de Recursos (Recomendados)
 
 | Servicio  | CPU | RAM   | Disco  |
 | --------- | --- | ----- | ------ |
