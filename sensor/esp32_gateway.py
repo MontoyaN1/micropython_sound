@@ -70,97 +70,90 @@ def main():
 
     print(f"WiFi OK: {wifi.ifconfig()[0]}")
 
-    try:
-        while True:
-            # === 1. CAPTURAR ESPNOW ===
-            print(f"\n[ESPNOW] Capturando por {ESPNOW_CAPTURE_TIME}s...")
-            blink(1)
+    while True:
+        # === 1. CAPTURAR ESPNOW ===
+        print(f"\n[ESPNOW] Capturando por {ESPNOW_CAPTURE_TIME}s...")
+        blink(1)
 
-            # Activar ESPNOW
-            e = espnow.ESPNow()
-            e.active(True)
+        # Activar ESPNOW
+        e = espnow.ESPNow()
+        e.active(True)
 
-            # Capturar por el tiempo configurado
-            iterations = int(ESPNOW_CAPTURE_TIME * 10)  # Cada 0.1 segundos
-            for _ in range(iterations):
-                try:
-                    host, msg = e.recv(0)
-                    if msg:
-                        texto = msg.decode("utf-8", "ignore").strip()
-                        if ":" in texto:
-                            micro, valor = texto.split(":")
-                            if valor not in ["INICIO", "FIN"]:
-                                try:
-                                    db = float(valor)
-                                    if micro not in datos:
-                                        datos[micro] = []
-                                    datos[micro].append(db)
-                                    # Solo 3 muestras máximo
-                                    if len(datos[micro]) > 3:
-                                        datos[micro] = datos[micro][-3:]
-                                    print(f"  {micro}: {db:.1f} dB")
-                                except:
-                                    pass
-                except:
-                    pass
-                time.sleep(0.1)
+        # Capturar por el tiempo configurado
+        iterations = int(ESPNOW_CAPTURE_TIME * 10)  # Cada 0.1 segundos
+        for _ in range(iterations):
+            try:
+                host, msg = e.recv(0)
+                if msg:
+                    texto = msg.decode("utf-8", "ignore").strip()
+                    if ":" in texto:
+                        micro, valor = texto.split(":")
+                        if valor not in ["INICIO", "FIN"]:
+                            try:
+                                db = float(valor)
+                                if micro not in datos:
+                                    datos[micro] = []
+                                datos[micro].append(db)
+                                # Solo 3 muestras máximo
+                                if len(datos[micro]) > 3:
+                                    datos[micro] = datos[micro][-3:]
+                                print(f"  {micro}: {db:.1f} dB")
+                            except ValueError:
+                                pass
+            except (OSError, ValueError) as exeption:
+                print(exeption)
+                pass
+            time.sleep(0.1)
 
-            # Desactivar ESPNOW
-            e.active(False)
-            time.sleep(1.0)  # Pausa para estabilización
+        # Desactivar ESPNOW
+        e.active(False)
+        time.sleep(1.0)  # Pausa para estabilización
 
-            # === 2. ENVIAR MQTT ===
-            ahora = time.time()
+        # === 2. ENVIAR MQTT ===
+        ahora = time.time()
 
-            if ahora - ultimo_envio >= MQTT_SEND_INTERVAL and datos:
-                print("\n[MQTT] Enviando...")
+        if ahora - ultimo_envio >= MQTT_SEND_INTERVAL and datos:
+            print("\n[MQTT] Enviando...")
 
-                # Preparar mensaje con todos los datos
-                mensaje = {"timestamp": int(ahora), "sensors": []}
+            # Preparar mensaje con todos los datos
+            mensaje = {"timestamp": int(ahora), "sensors": []}
 
-                for micro, muestras in datos.items():
-                    for i, db in enumerate(muestras):
-                        mensaje["sensors"].append(
-                            {
-                                "micro_id": micro,
-                                "value": round(db, 1),
-                                "sample": i + 1,
-                            }
-                        )
-
-                # Enviar MQTT
-                try:
-                    # Configurar cliente MQTT con credenciales opcionales
-                    mqtt = MQTTClient(
-                        MQTT_CLIENT_ID,
-                        MQTT_BROKER,
-                        MQTT_PORT,
-                        MQTT_USER if MQTT_USER else None,
-                        MQTT_PASSWORD if MQTT_PASSWORD else None,
+            for micro, muestras in datos.items():
+                for i, db in enumerate(muestras):
+                    mensaje["sensors"].append(
+                        {
+                            "micro_id": micro,
+                            "value": round(db, 1),
+                            "sample": i + 1,
+                        }
                     )
-                    mqtt.connect()
-                    mqtt.publish(MQTT_TOPIC, json.dumps(mensaje))
-                    print(f"✓ Enviado: {len(mensaje['sensors'])} muestras")
-                    blink(2)
 
-                    # Limpiar datos después de enviar
-                    datos = {}
-                    ultimo_envio = ahora
-                    mqtt.disconnect()
-                    time.sleep(1.0)  # Pausa antes de reactivar ESPNOW
+            # Enviar MQTT
+            try:
+                # Configurar cliente MQTT con credenciales opcionales
+                mqtt = MQTTClient(
+                    MQTT_CLIENT_ID,
+                    MQTT_BROKER,
+                    MQTT_PORT,
+                    MQTT_USER if MQTT_USER else None,
+                    MQTT_PASSWORD if MQTT_PASSWORD else None,
+                )
+                mqtt.connect()
+                mqtt.publish(MQTT_TOPIC, json.dumps(mensaje))
+                print(f"✓ Enviado: {len(mensaje['sensors'])} muestras")
+                blink(2)
 
-                except Exception as e:
-                    print(f"✗ Error MQTT: {e}")
+                # Limpiar datos después de enviar
+                datos = {}
+                ultimo_envio = ahora
+                mqtt.disconnect()
+                time.sleep(1.0)  # Pausa antes de reactivar ESPNOW
 
-            # === 3. ESPERAR ===
-            time.sleep(1.0)
+            except Exception as e:
+                print(f"✗ Error MQTT: {e}")
 
-    except KeyboardInterrupt:
-        print("\nDeteniendo...")
-
-    print("\n" + "=" * 40)
-    print("Fin")
-    print("=" * 40)
+        # === 3. ESPERAR ===
+        time.sleep(1.0)
 
 
 if __name__ == "__main__":
