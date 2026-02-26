@@ -1,12 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import {
-  Activity,
-  AlertTriangle,
-  TrendingUp,
-  Clock,
-  Map,
-  Target,
-} from "lucide-react";
+import { Activity, AlertTriangle, TrendingUp, Clock, Map } from "lucide-react";
 import FloorPlanMap from "../components/Map/FloorPlanMap";
 import { useWebSocket } from "../hooks/useWebSocket";
 import { testSensorData, testIdwData, testEpicenter } from "../utils/testData";
@@ -29,9 +22,9 @@ const RealTimePage = () => {
   const epicenter = connected ? wsEpicenter : testEpicenter;
 
   const [showHeatmap, setShowHeatmap] = useState(true);
-  const [showEpicenter, setShowEpicenter] = useState(true);
+  const [showEpicenter, setShowEpicenter] = useState(false);
   const [showGrid, setShowGrid] = useState(true);
-  const [colorScheme, setColorScheme] = useState("plasma");
+  const [colorScheme, setColorScheme] = useState("redyellowgreen");
   const [opacity, setOpacity] = useState(0.6);
   const [idwPower, setIdwPower] = useState(2);
 
@@ -114,6 +107,14 @@ const RealTimePage = () => {
             `rgba(255, 64, 64, ${opacity})`,
             `rgba(255, 0, 0, ${opacity})`,
           ];
+        case "redyellowgreen":
+          return [
+            `rgba(0, 204, 0, ${opacity})`, // Verde intenso (baja intensidad)
+            `rgba(128, 255, 0, ${opacity})`, // Verde amarillento
+            `rgba(255, 255, 0, ${opacity})`, // Amarillo puro (media intensidad)
+            `rgba(255, 153, 0, ${opacity})`, // Naranja
+            `rgba(255, 0, 0, ${opacity})`, // Rojo puro (alta intensidad)
+          ];
         default:
           return [
             `rgba(68, 1, 84, ${opacity})`,
@@ -174,7 +175,11 @@ const RealTimePage = () => {
   const formatTime = (timestamp) => {
     if (!timestamp) return "--:--:--";
     const date = new Date(timestamp);
-    return date.toLocaleTimeString("es-ES", { hour12: false });
+    // Colombia está en UTC-5, restar 5 horas para mostrar hora correcta
+    date.setHours(date.getHours() - 5);
+    return date.toLocaleTimeString("es-CO", {
+      hour12: false,
+    });
   };
 
   const getNoiseLevelColor = (value) => {
@@ -337,14 +342,12 @@ const RealTimePage = () => {
                 <FloorPlanMap
                   sensorData={sensorData}
                   idwData={showHeatmap ? idwData : null}
-                  epicenter={showEpicenter ? epicenter : null}
                   showHeatmap={showHeatmap}
-                  showEpicenter={showEpicenter}
                   showGrid={showGrid}
                   colorScheme={colorScheme}
                   opacity={opacity}
                   idwPower={idwPower}
-                  key={`floorplan-${showEpicenter}-${showHeatmap}`}
+                  key={`floorplan-${showHeatmap}`}
                 />
               ) : (
                 <div className="h-full flex flex-col items-center justify-center space-y-4">
@@ -354,7 +357,7 @@ const RealTimePage = () => {
                       Conectando al servidor...
                     </h3>
                     <p className="text-primary-600">
-                      Estableciendo conexión WebSocket con el backend
+                      Esperando conexión WebSocket...
                     </p>
                   </div>
                 </div>
@@ -390,25 +393,6 @@ const RealTimePage = () => {
                     <div className="w-3 h-3 rounded-full bg-cyan-500"></div>
                     <div className="w-3 h-3 rounded-full bg-lime-500"></div>
                   </div>
-                </div>
-
-                <div className="flex items-center justify-between p-3 bg-primary-50 rounded-lg">
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={showEpicenter}
-                      onChange={(e) => {
-                        console.log(
-                          "Epicentro checkbox cambiado:",
-                          e.target.checked,
-                        );
-                        setShowEpicenter(e.target.checked);
-                      }}
-                      className="rounded text-accent-500"
-                    />
-                    <span className="text-sm font-medium">Epicentro</span>
-                  </label>
-                  <div className="w-4 h-4 rounded-full bg-red-500 animate-pulse"></div>
                 </div>
 
                 <div className="flex items-center justify-between p-3 bg-primary-50 rounded-lg">
@@ -510,6 +494,9 @@ const RealTimePage = () => {
                           <option value="inferno">Inferno</option>
                           <option value="magma">Magma</option>
                           <option value="bluered">Bluered</option>
+                          <option value="redyellowgreen">
+                            Red-Yellow-Green
+                          </option>
                         </select>
                       </div>
                     </div>
@@ -657,7 +644,7 @@ const RealTimePage = () => {
                   </td>
                   <td className="py-3 px-4">
                     <div className="text-sm text-primary-600">
-                      {new Date(sensor.last_update).toLocaleTimeString("es-ES")}
+                      {formatTime(sensor.last_update)}
                     </div>
                   </td>
                 </tr>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, memo } from "react";
-import { Activity, Target, Map, Grid } from "lucide-react";
+import { Activity, Map, Grid } from "lucide-react";
 
 // Configuración del plano
 const PLAN_WIDTH = 5; // metros
@@ -88,6 +88,13 @@ const colorPalettes = {
     [0.5, 0.0, 0.5],
     [0.75, 0.0, 0.25],
     [1.0, 0.0, 0.0], // Rojo puro
+  ],
+  redyellowgreen: [
+    [0.0, 0.8, 0.0], // Verde intenso (baja intensidad)
+    [0.5, 1.0, 0.0], // Verde amarillento
+    [1.0, 1.0, 0.0], // Amarillo puro (media intensidad)
+    [1.0, 0.6, 0.0], // Naranja
+    [1.0, 0.0, 0.0], // Rojo puro (alta intensidad)
   ],
 };
 
@@ -232,132 +239,14 @@ const SensorMarker = ({
               </div>
             </div>
             <div className="text-xs text-gray-500 border-t pt-2">
-              Actualizado: {new Date(last_update).toLocaleTimeString("es-ES")}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Componente de epicentro
-const EpicenterMarker = ({
-  x,
-  y,
-  calculated_at,
-  frontend_calculated = false,
-  max_sensor = null,
-}) => {
-  const [showPopup, setShowPopup] = useState(false);
-  const [tooltipPosition, setTooltipPosition] = useState("top"); // 'top' o 'bottom'
-  const containerRef = useRef(null);
-
-  // Calcular posición en metros
-  const metersX = (PLAN_IMAGE_WIDTH - x) / METERS_TO_PIXELS_X;
-  const metersY = (PLAN_IMAGE_HEIGHT - y) / METERS_TO_PIXELS_Y;
-
-  // Determinar la mejor posición para el tooltip basado en la posición del epicentro
-  useEffect(() => {
-    if (containerRef.current) {
-      const containerRect = containerRef.current.getBoundingClientRect();
-      const epicenterTop = containerRect.top;
-
-      // Si el epicentro está en la parte superior (menos de 150px desde el borde superior)
-      // mostrar el tooltip abajo, de lo contrario arriba
-      if (epicenterTop < 150) {
-        setTooltipPosition("bottom");
-      } else {
-        setTooltipPosition("top");
-      }
-    }
-  }, [x, y]);
-
-  return (
-    <div
-      ref={containerRef}
-      className="absolute cursor-pointer group isolate"
-      style={{
-        left: `${x}px`,
-        top: `${y}px`,
-        transform: "translate(-50%, -50%)", // Centrar en la posición
-        zIndex: 60,
-      }}
-      onMouseEnter={() => setShowPopup(true)}
-      onMouseLeave={() => setShowPopup(false)}
-    >
-      {/* Icono de epicentro */}
-      <div className="w-14 h-14 rounded-full bg-red-500 border-4 border-white flex items-center justify-center shadow-xl animate-pulse">
-        <svg
-          className="w-8 h-8 text-white"
-          fill="currentColor"
-          viewBox="0 0 20 20"
-        >
-          <path
-            fillRule="evenodd"
-            d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.214.33-.403.713-.57 1.116-.334.804-.614 1.768-.84 2.734a31.365 31.365 0 00-.613 3.58 2.64 2.64 0 01-.945-1.067c-.328-.68-.398-1.534-.398-2.654A1 1 0 005.05 6.05 6.981 6.981 0 003 11a7 7 0 1011.95-4.95c-.592-.591-.98-.985-1.348-1.467-.363-.476-.724-1.063-1.207-2.03zM12.12 15.12A3 3 0 017 13s.879.5 2.5.5c0-1 .5-4 1.25-4.5.5 1 .786 1.293 1.371 1.879A2.99 2.99 0 0113 13a2.99 2.99 0 01-.879 2.121z"
-            clipRule="evenodd"
-          />
-        </svg>
-      </div>
-
-      {/* Tooltip al pasar el mouse - posición dinámica */}
-      <div
-        className={`absolute left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-[100] isolate ${
-          tooltipPosition === "top" ? "bottom-full mb-2" : "top-full mt-2"
-        }`}
-      >
-        <div className="bg-black/90 text-white text-xs rounded-lg py-2 px-3 shadow-xl whitespace-nowrap">
-          <div className="font-bold">Epicentro de Ruido</div>
-          <div className="text-gray-300">
-            {metersX.toFixed(1)}m, {metersY.toFixed(1)}m
-          </div>
-          {frontend_calculated && (
-            <div className="text-yellow-300">Calculado localmente</div>
-          )}
-          {max_sensor && (
-            <div className="text-gray-400">Basado en sensor {max_sensor}</div>
-          )}
-        </div>
-        <div
-          className={`absolute left-1/2 transform -translate-x-1/2 w-0 h-0 ${
-            tooltipPosition === "top"
-              ? "top-full border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-black/90"
-              : "bottom-full border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-black/90"
-          }`}
-        ></div>
-      </div>
-
-      {/* Popup detallado - posición dinámica */}
-      {showPopup && (
-        <div
-          className={`absolute left-1/2 transform -translate-x-1/2 w-64 bg-white rounded-lg shadow-xl p-4 z-50 border border-gray-200 ${
-            tooltipPosition === "top"
-              ? "bottom-full mb-12" // Más espacio para no solaparse con tooltip
-              : "top-full mt-12"
-          }`}
-        >
-          <div className="space-y-2">
-            <div className="font-bold text-lg flex items-center space-x-2">
-              <Target className="h-5 w-5 text-red-500" />
-              <span>Epicentro de Ruido</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div>
-                <div className="text-gray-500">Coordenadas</div>
-                <div>
-                  {metersX.toFixed(1)}m, {metersY.toFixed(1)}m
-                </div>
-              </div>
-            </div>
-            {max_sensor && (
-              <div>
-                <div className="text-gray-500">Sensor de referencia</div>
-                <div className="font-medium">{max_sensor}</div>
-              </div>
-            )}
-            <div className="text-xs text-gray-500 border-t pt-2">
-              Calculado: {new Date(calculated_at).toLocaleTimeString("es-ES")}
+              Actualizado:{" "}
+              {(() => {
+                const date = new Date(last_update);
+                date.setHours(date.getHours() - 5);
+                return date.toLocaleTimeString("es-CO", {
+                  hour12: false,
+                });
+              })()}
             </div>
           </div>
         </div>
@@ -625,47 +514,16 @@ const HeatmapLayer = memo(
       return { fullXi, fullYi, fullZi };
     };
 
-    useEffect(() => {
-      // console.log("HeatmapLayer - Props recibidas:", {
-      //   showHeatmap,
-      //   colorScheme,
-      //   opacity,
-      //   idwPower,
-      //   hasIdwData: !!idwData,
-      //   hasXi: !!(idwData && idwData.xi),
-      //   hasYi: !!(idwData && idwData.yi),
-      //   hasZi: !!(idwData && idwData.zi),
-      // });
-
-      if (
-        !showHeatmap ||
-        !idwData ||
-        !idwData.xi ||
-        !idwData.yi ||
-        !idwData.zi ||
-        !metersToPixels
-      ) {
-        // Limpiar canvas si no hay datos o está desactivado
-        const canvas = canvasRef.current;
-        if (canvas) {
-          const ctx = canvas.getContext("2d");
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-        }
-        return;
+    // Memoizar datos normalizados y grilla completa para evitar recálculos costosos
+    const { normalizedXi, normalizedYi, normalizedZi } = useMemo(() => {
+      if (!idwData || !idwData.xi || !idwData.yi || !idwData.zi) {
+        return { normalizedXi: null, normalizedYi: null, normalizedZi: null };
       }
 
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-
-      const ctx = canvas.getContext("2d");
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      // Obtener datos de la grilla IDW
       const xi = idwData.xi;
       const yi = idwData.yi;
       const zi = idwData.zi;
 
-      // Verificar estructura de datos
       let normalizedXi, normalizedYi;
 
       // Si xi es array 1D, convertirlo a 2D
@@ -685,21 +543,28 @@ const HeatmapLayer = memo(
         normalizedYi = yi;
       }
 
-      // Crear grilla densa que cubre TODO el plano
-      const { fullXi, fullYi, fullZi } = createFullPlaneGrid(
-        normalizedXi,
-        normalizedYi,
-        zi,
-      );
+      return { normalizedXi, normalizedYi, normalizedZi: zi };
+    }, [idwData]);
 
-      if (fullZi.length === 0) {
-        // console.log(
-        //   "HeatmapLayer - No se pudo generar grilla para todo el plano",
-        // );
-        return;
+    // Memoizar grilla completa para evitar recálculos en cada render
+    const { fullXi, fullYi, fullZi } = useMemo(() => {
+      if (!normalizedXi || !normalizedYi || !normalizedZi) {
+        return { fullXi: [], fullYi: [], fullZi: [] };
       }
 
-      // Encontrar valores mínimo y máximo
+      console.log(
+        `[${new Date().toISOString()}] HeatmapLayer - Creando grilla densa`,
+      );
+
+      return createFullPlaneGrid(normalizedXi, normalizedYi, normalizedZi);
+    }, [normalizedXi, normalizedYi, normalizedZi]);
+
+    // Memoizar estadísticas de la grilla (min/max)
+    const { minVal, maxVal, valueRange } = useMemo(() => {
+      if (!fullZi || fullZi.length === 0) {
+        return { minVal: 0, maxVal: 0, valueRange: 0 };
+      }
+
       let minVal = Infinity;
       let maxVal = -Infinity;
 
@@ -713,12 +578,82 @@ const HeatmapLayer = memo(
         }
       }
 
+      // Si no hay variación, establecer un rango mínimo
       if (maxVal <= minVal) {
-        // console.log("HeatmapLayer - Sin variación en datos");
-        return;
+        maxVal = minVal + 1;
       }
 
       const valueRange = maxVal - minVal;
+
+      return { minVal, maxVal, valueRange };
+    }, [fullZi]);
+
+    useEffect(() => {
+      console.log(
+        `[${new Date().toISOString()}] HeatmapLayer - Props recibidas:`,
+        {
+          showHeatmap,
+          colorScheme,
+          opacity,
+          idwPower,
+          hasIdwData: !!idwData,
+          hasXi: !!(idwData && idwData.xi),
+          hasYi: !!(idwData && idwData.yi),
+          hasZi: !!(idwData && idwData.zi),
+          timestamp: new Date().toISOString(),
+        },
+      );
+
+      if (
+        !showHeatmap ||
+        !idwData ||
+        !idwData.xi ||
+        !idwData.yi ||
+        !idwData.zi ||
+        !metersToPixels
+      ) {
+        // Limpiar canvas si no hay datos o está desactivado
+        const canvas = canvasRef.current;
+        if (canvas) {
+          const ctx = canvas.getContext("2d");
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          console.log(
+            `[${new Date().toISOString()}] HeatmapLayer - Canvas limpiado (sin datos o desactivado)`,
+          );
+        }
+        return;
+      }
+
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      console.log(
+        `[${new Date().toISOString()}] HeatmapLayer - Iniciando renderizado del mapa de calor`,
+      );
+
+      if (!fullXi || !fullYi || !fullZi || fullZi.length === 0) {
+        console.log(
+          `[${new Date().toISOString()}] HeatmapLayer - No hay grilla válida para renderizar`,
+        );
+        return;
+      }
+
+      console.log(
+        `[${new Date().toISOString()}] HeatmapLayer - Estructura de datos:`,
+        {
+          fullXi_length: fullXi.length,
+          fullYi_length: fullYi.length,
+          fullZi_rows: fullZi.length,
+          fullZi_cols: fullZi[0]?.length || 0,
+          minVal,
+          maxVal,
+          valueRange,
+        },
+      );
+
+      // Usar valores memoizados minVal, maxVal, valueRange
       const rows = fullZi.length;
       const cols = fullZi[0]?.length || 0;
 
@@ -890,14 +825,31 @@ const HeatmapLayer = memo(
       );
       ctx.globalAlpha = 1.0;
 
-      // console.log("HeatmapLayer - Mapa de calor completado", {
-      //   cubreTodoElPlano: true,
-      //   dimensiones: `${rows}x${cols}`,
-      //   esquemaColor: colorScheme,
-      //   opacidad: opacity,
-      //   potenciaIDW: idwPower,
-      // });
-    }, [idwData, showHeatmap, metersToPixels, colorScheme, opacity, idwPower]);
+      console.log(
+        `[${new Date().toISOString()}] HeatmapLayer - Mapa de calor completado`,
+        {
+          cubreTodoElPlano: true,
+          dimensiones: `${rows}x${cols}`,
+          esquemaColor: colorScheme,
+          opacidad: opacity,
+          potenciaIDW: idwPower,
+          timestamp: new Date().toISOString(),
+        },
+      );
+    }, [
+      idwData,
+      showHeatmap,
+      metersToPixels,
+      colorScheme,
+      opacity,
+      idwPower,
+      fullXi,
+      fullYi,
+      fullZi,
+      minVal,
+      maxVal,
+      valueRange,
+    ]);
 
     return (
       <canvas
@@ -951,299 +903,22 @@ const GridOverlay = ({ showGrid }) => {
   return <>{gridLines}</>;
 };
 
-// Función para calcular epicentro en frontend (fallback)
-const calculateEpicenterFrontend = (sensors) => {
-  console.log("=== CALCULATING EPICENTER FRONTEND ===");
-  console.log("Input sensors:", sensors);
-
-  if (sensors.length === 0) {
-    console.log("No sensors, returning null");
-    return null;
-  }
-
-  // Método 1: Ponderado por valor (más ruido = más peso)
-  let totalWeight = 0;
-  let weightedX = 0;
-  let weightedY = 0;
-
-  sensors.forEach((sensor) => {
-    // Usar un peso mínimo de 1 para todos los sensores con valor > 0
-    // Esto evita que todos los pesos sean 0 cuando valores <= 40
-    const baseWeight = Math.max(sensor.value - 40, 1);
-    // Aplicar factor cuadrático para dar más peso a valores altos
-    const weight = baseWeight * baseWeight;
-    console.log(
-      `Sensor ${sensor.micro_id}: value=${sensor.value}, weight=${weight}, lon=${sensor.longitude}, lat=${sensor.latitude}`,
-    );
-    weightedX += sensor.longitude * weight;
-    weightedY += sensor.latitude * weight;
-    totalWeight += weight;
-  });
-
-  console.log(
-    `Total weight: ${totalWeight}, weightedX: ${weightedX}, weightedY: ${weightedY}`,
-  );
-
-  if (totalWeight > 0) {
-    const epicenterX = weightedX / totalWeight;
-    const epicenterY = weightedY / totalWeight;
-
-    // Verificar que las coordenadas sean válidas y estén dentro del plano
-    // con tolerancia para errores de punto flotante
-    const EPSILON = 0.0001;
-    if (
-      isNaN(epicenterX) ||
-      isNaN(epicenterY) ||
-      epicenterX < 0 - EPSILON ||
-      epicenterX > 5 + EPSILON ||
-      epicenterY < 0 - EPSILON ||
-      epicenterY > 14 + EPSILON
-    ) {
-      console.warn(
-        "Epicentro calculado inválido, usando sensor con valor máximo",
-      );
-      // Fallback al método 2
-    } else {
-      // Ajustar coordenadas al rango válido si están cerca del límite
-      const adjustedX = Math.max(0, Math.min(5, epicenterX));
-      const adjustedY = Math.max(0, Math.min(14, epicenterY));
-
-      const result = {
-        longitude: adjustedX,
-        latitude: adjustedY,
-        calculated_at: new Date().toISOString(),
-        frontend_calculated: true,
-      };
-      console.log("Weighted epicenter result:", result);
-      return result;
-    }
-  }
-
-  // Método 2: Sensor con valor máximo (fallback robusto)
-  const maxSensor = sensors.reduce(
-    (max, sensor) => (sensor.value > max.value ? sensor : max),
-    sensors[0],
-  );
-
-  // Verificar que las coordenadas del sensor máximo sean válidas
-  // con tolerancia para errores de punto flotante
-  const EPSILON = 0.0001;
-  if (
-    isNaN(maxSensor.longitude) ||
-    isNaN(maxSensor.latitude) ||
-    maxSensor.longitude < 0 - EPSILON ||
-    maxSensor.longitude > 5 + EPSILON ||
-    maxSensor.latitude < 0 - EPSILON ||
-    maxSensor.latitude > 14 + EPSILON
-  ) {
-    console.error("Coordenadas del sensor máximo inválidas:", maxSensor);
-    // Último fallback: promedio de todas las posiciones de sensores
-    const avgLongitude =
-      sensors.reduce((sum, s) => sum + s.longitude, 0) / sensors.length;
-    const avgLatitude =
-      sensors.reduce((sum, s) => sum + s.latitude, 0) / sensors.length;
-
-    const result = {
-      longitude: Math.max(0, Math.min(5, avgLongitude)),
-      latitude: Math.max(0, Math.min(14, avgLatitude)),
-      calculated_at: new Date().toISOString(),
-      frontend_calculated: true,
-      fallback: "average_of_sensors",
-    };
-    console.log("Average fallback epicenter result:", result);
-    return result;
-  }
-
-  const result = {
-    longitude: maxSensor.longitude,
-    latitude: maxSensor.latitude,
-    calculated_at: new Date().toISOString(),
-    frontend_calculated: true,
-    max_sensor: maxSensor.micro_id,
-  };
-
-  console.log("Max sensor epicenter result:", result);
-  return result;
-};
-
-// Función para calcular epicentro REAL desde el mapa de calor (IDW)
-const calculateEpicenterFromHeatmap = (idwData) => {
-  console.log("=== CALCULATING EPICENTER FROM HEATMAP ===");
-  console.log("IDW data structure:", {
-    hasXi: !!idwData?.xi,
-    hasYi: !!idwData?.yi,
-    hasZi: !!idwData?.zi,
-    xiType: Array.isArray(idwData?.xi)
-      ? Array.isArray(idwData.xi[0])
-        ? "2D"
-        : "1D"
-      : "unknown",
-    yiType: Array.isArray(idwData?.yi)
-      ? Array.isArray(idwData.yi[0])
-        ? "2D"
-        : "1D"
-      : "unknown",
-    ziType: Array.isArray(idwData?.zi)
-      ? Array.isArray(idwData.zi[0])
-        ? "2D"
-        : "1D"
-      : "unknown",
-    xiLength: idwData?.xi?.length,
-    yiLength: idwData?.yi?.length,
-    ziLength: idwData?.zi?.length,
-  });
-
-  if (!idwData || !idwData.xi || !idwData.yi || !idwData.zi) {
-    console.log("No valid IDW data for heatmap epicenter calculation");
-    return null;
-  }
-
-  const xi = idwData.xi;
-  const yi = idwData.yi;
-  const zi = idwData.zi;
-
-  let maxValue = -Infinity;
-  let maxX = 0;
-  let maxY = 0;
-
-  // Detectar estructura de datos: 1D o 2D
-  const isZi2D = Array.isArray(zi) && zi.length > 0 && Array.isArray(zi[0]);
-  const isXi2D = Array.isArray(xi) && xi.length > 0 && Array.isArray(xi[0]);
-  const isYi2D = Array.isArray(yi) && yi.length > 0 && Array.isArray(yi[0]);
-
-  console.log(
-    `Data structure: zi is ${isZi2D ? "2D" : "1D"}, xi is ${isXi2D ? "2D" : "1D"}, yi is ${isYi2D ? "2D" : "1D"}`,
-  );
-
-  if (isZi2D) {
-    // Estructura 2D: zi[i][j]
-    for (let i = 0; i < zi.length; i++) {
-      const row = zi[i];
-      if (!Array.isArray(row)) continue;
-
-      for (let j = 0; j < row.length; j++) {
-        const value = row[j];
-        if (value !== null && value !== undefined && value > maxValue) {
-          maxValue = value;
-          // Obtener coordenadas según estructura de xi/yi
-          if (isXi2D && isYi2D) {
-            maxX = xi[i][j];
-            maxY = yi[i][j];
-          } else if (!isXi2D && !isYi2D) {
-            // xi y yi son 1D, usar índices
-            maxX = xi[j] || xi[0] || 0;
-            maxY = yi[i] || yi[0] || 0;
-          } else {
-            // Caso mixto - fallback
-            maxX = (isXi2D ? xi[i][j] : xi[j]) || 0;
-            maxY = (isYi2D ? yi[i][j] : yi[i]) || 0;
-          }
-        }
-      }
-    }
-  } else {
-    // Estructura 1D: zi[i]
-    for (let i = 0; i < zi.length; i++) {
-      const value = zi[i];
-      if (value !== null && value !== undefined && value > maxValue) {
-        maxValue = value;
-        // Obtener coordenadas según estructura de xi/yi
-        if (isXi2D && isYi2D) {
-          // Encontrar el índice correspondiente en matrices 2D
-          // Esto es complejo, mejor usar índices si xi/yi son 1D
-          console.warn("zi es 1D pero xi/yi son 2D - estructura inesperada");
-          maxX = xi[0]?.[i] || xi[i]?.[0] || 0;
-          maxY = yi[0]?.[i] || yi[i]?.[0] || 0;
-        } else {
-          // xi y yi son 1D
-          maxX = xi[i] || 0;
-          maxY = yi[i] || 0;
-        }
-      }
-    }
-  }
-
-  if (maxValue === -Infinity) {
-    console.log("No valid values found in heatmap");
-    return null;
-  }
-
-  // Validar que las coordenadas estén dentro del rango razonable del plano
-  // con tolerancia para errores de punto flotante
-  const isValidCoordinate = (x, y) => {
-    const EPSILON = 0.0001;
-    return (
-      x >= 0 - EPSILON &&
-      x <= 5 + EPSILON &&
-      y >= 0 - EPSILON &&
-      y <= 14 + EPSILON
-    );
-  };
-
-  if (!isValidCoordinate(maxX, maxY)) {
-    console.warn(
-      `Coordenadas del epicentro fuera de rango: longitude=${maxX}, latitude=${maxY}`,
-    );
-    // Ajustar al rango válido
-    maxX = Math.max(0, Math.min(5, maxX));
-    maxY = Math.max(0, Math.min(14, maxY));
-    console.log(`Coordenadas ajustadas: longitude=${maxX}, latitude=${maxY}`);
-  }
-
-  const result = {
-    longitude: maxX,
-    latitude: maxY,
-    calculated_at: new Date().toISOString(),
-    frontend_calculated: true,
-    from_heatmap: true,
-    max_value: maxValue,
-    data_structure: isZi2D ? "2D" : "1D",
-  };
-
-  console.log("Heatmap epicenter result:", result);
-  return result;
-};
-
-// Función helper para validar epicentro (con tolerancia para errores de punto flotante)
-const isValidEpicenter = (epicenter) => {
-  if (!epicenter) return false;
-  if (epicenter.longitude === undefined || epicenter.latitude === undefined)
-    return false;
-
-  // Usar tolerancia para errores de precisión de punto flotante
-  const EPSILON = 0.0001;
-  const validLongitude =
-    epicenter.longitude >= 0 - EPSILON && epicenter.longitude <= 5 + EPSILON;
-  const validLatitude =
-    epicenter.latitude >= 0 - EPSILON && epicenter.latitude <= 14 + EPSILON;
-
-  return validLongitude && validLatitude;
-};
-
 const FloorPlanMap = ({
   sensorData,
   idwData,
-  epicenter,
   showHeatmap: initialShowHeatmap = true,
-  showEpicenter: initialShowEpicenter = true,
   showGrid: initialShowGrid = true,
-  colorScheme: externalColorScheme = "bluered",
+  colorScheme: externalColorScheme = "redyellowgreen",
   opacity: externalOpacity = 0.7,
   idwPower: externalIdwPower = 2,
 }) => {
   const [showGrid, setShowGrid] = useState(initialShowGrid);
   const [showHeatmap, setShowHeatmap] = useState(initialShowHeatmap);
-  const [showEpicenter, setShowEpicenter] = useState(initialShowEpicenter);
   const [colorScheme, setColorScheme] = useState(externalColorScheme);
   const [opacity, setOpacity] = useState(externalOpacity);
   const [idwPower, setIdwPower] = useState(externalIdwPower);
   const [heatmapStats, setHeatmapStats] = useState({ min: null, max: null });
   const containerRef = useRef(null);
-  const lastValidBackendEpicenterRef = useRef(null);
-  const lastEpicenterCoordsRef = useRef(null);
-  const staleEpicenterCountRef = useRef(0);
-  const [frontendEpicenter, setFrontendEpicenter] = useState(null);
-  const epicenterUpdateIntervalRef = useRef(null);
 
   // Generar estilo de gradiente para la leyenda del mapa de calor
   const gradientStyle = useMemo(() => {
@@ -1271,13 +946,6 @@ const FloorPlanMap = ({
   }, [externalOpacity]);
 
   useEffect(() => {
-    console.log(
-      `🎯 FloorPlanMap - showEpicenter sync: ${initialShowEpicenter} (prop) -> ${showEpicenter} (state)`,
-    );
-    setShowEpicenter(initialShowEpicenter);
-  }, [initialShowEpicenter]);
-
-  useEffect(() => {
     setIdwPower(externalIdwPower);
   }, [externalIdwPower]);
 
@@ -1285,317 +953,7 @@ const FloorPlanMap = ({
     setShowGrid(initialShowGrid);
   }, [initialShowGrid]);
 
-  // Actualizar ref con último epicentro válido del backend (independiente de showEpicenter)
-  useEffect(() => {
-    if (isValidEpicenter(epicenter)) {
-      console.log(
-        "💾 Guardando último epicentro válido del backend:",
-        epicenter,
-      );
-      lastValidBackendEpicenterRef.current = {
-        ...epicenter,
-        saved_at: new Date().toISOString(),
-      };
-
-      // Detectar si el epicentro está estancado (no cambia)
-      const currentCoords = `${epicenter.longitude.toFixed(6)},${epicenter.latitude.toFixed(6)}`;
-      const lastCoords = lastEpicenterCoordsRef.current;
-
-      if (lastCoords === currentCoords) {
-        staleEpicenterCountRef.current += 1;
-        console.log(
-          `⚠️ Epicentro del backend estancado (mismas coordenadas ${staleEpicenterCountRef.current} veces seguidas):`,
-          currentCoords,
-        );
-      } else {
-        staleEpicenterCountRef.current = 0;
-        console.log(
-          "🔄 Epicentro del backend cambió:",
-          lastCoords ? `${lastCoords} -> ${currentCoords}` : currentCoords,
-        );
-      }
-
-      lastEpicenterCoordsRef.current = currentCoords;
-    }
-  }, [epicenter]);
-
-  // Actualización periódica del epicentro en frontend cada 5 segundos
-  useEffect(() => {
-    const updateFrontendEpicenter = () => {
-      if (!showEpicenter || sensorData.length === 0) {
-        console.log(
-          "⏸️ Actualización periódica del epicentro pausada: showEpicenter false o sin sensores",
-        );
-        return;
-      }
-
-      console.log("🔄 Actualización periódica del epicentro (cada 5s)");
-
-      // Calcular epicentro desde sensores
-      const calculatedEpicenter = calculateEpicenterFrontend(sensorData);
-
-      if (calculatedEpicenter && isValidEpicenter(calculatedEpicenter)) {
-        console.log("✅ Epicentro calculado en frontend:", calculatedEpicenter);
-        setFrontendEpicenter(calculatedEpicenter);
-      } else {
-        console.log("❌ No se pudo calcular epicentro válido en frontend");
-      }
-    };
-
-    // Iniciar intervalo de actualización cada 5 segundos
-    if (showEpicenter) {
-      console.log(
-        "⏱️ Iniciando actualización periódica del epicentro (cada 5 segundos)",
-      );
-      updateFrontendEpicenter(); // Ejecutar inmediatamente
-      epicenterUpdateIntervalRef.current = setInterval(
-        updateFrontendEpicenter,
-        5000,
-      );
-    }
-
-    return () => {
-      if (epicenterUpdateIntervalRef.current) {
-        console.log("⏹️ Deteniendo actualización periódica del epicentro");
-        clearInterval(epicenterUpdateIntervalRef.current);
-        epicenterUpdateIntervalRef.current = null;
-      }
-    };
-  }, [showEpicenter, sensorData]);
-
-  // Limpiar intervalo cuando showEpicenter cambia a false
-  useEffect(() => {
-    if (!showEpicenter && epicenterUpdateIntervalRef.current) {
-      console.log(
-        "⏹️ Deteniendo actualización periódica del epicenter (showEpicenter = false)",
-      );
-      clearInterval(epicenterUpdateIntervalRef.current);
-      epicenterUpdateIntervalRef.current = null;
-      setFrontendEpicenter(null);
-    }
-  }, [showEpicenter]);
-
-  // Calcular epicentro - Lógica independiente del heatmap
-  const effectiveEpicenter = (() => {
-    console.log("=== DEBUG EPICENTER CALCULATION ===");
-    console.log("Epicenter prop recibido:", epicenter);
-    console.log("showEpicenter state:", showEpicenter);
-    console.log("showHeatmap state:", showHeatmap);
-    console.log("IDW data available:", !!idwData);
-    console.log("Sensor data count:", sensorData.length);
-    console.log("showEpicenter es false?", showEpicenter === false);
-    console.log("epicenter es null?", epicenter === null);
-    console.log(
-      "Último epicentro válido guardado:",
-      lastValidBackendEpicenterRef.current,
-    );
-    console.log("initialShowEpicenter prop:", initialShowEpicenter);
-
-    // Si el epicentro está desactivado, no calcular nada
-    if (!showEpicenter) {
-      console.log(
-        "⚠️ EPICENTRO DESACTIVADO - showEpicenter es false, retornando null",
-      );
-      return null;
-    }
-
-    // Si no hay epicentro del backend (null), tampoco calcular
-    if (epicenter === null) {
-      console.log("Epicenter prop es null, no hay datos del backend");
-    }
-
-    // PRIORIDAD 1: Epicentro del backend (si es válido y está disponible Y NO ESTÁ ESTANCADO)
-    if (epicenter && isValidEpicenter(epicenter)) {
-      console.log("✅ Epicentro del backend disponible y válido:");
-      console.log("Coords:", epicenter.longitude, epicenter.latitude);
-      console.log("showEpicenter:", showEpicenter);
-      console.log("IDW data available:", !!idwData);
-      console.log("showHeatmap:", showHeatmap);
-      console.log("Estancado count:", staleEpicenterCountRef.current);
-      console.log("Frontend epicenter disponible:", !!frontendEpicenter);
-
-      // Si el epicentro está estancado por más de 3 actualizaciones, usar epicentro del frontend
-      if (staleEpicenterCountRef.current > 3 && frontendEpicenter) {
-        console.log(
-          `⚠️ Epicentro del backend estancado por ${staleEpicenterCountRef.current} actualizaciones, usando epicentro del frontend:`,
-          frontendEpicenter,
-        );
-        return frontendEpicenter;
-      } else if (showEpicenter) {
-        console.log("✅ Usando epicentro del backend:", epicenter);
-        return epicenter;
-      } else {
-        console.log(
-          "❌ Epicentro del backend válido PERO showEpicenter es false, ignorando",
-        );
-      }
-    } else if (epicenter) {
-      console.log(
-        "❌ Epicentro del backend no válido (fuera de rango):",
-        epicenter,
-      );
-      console.log("Coords check:", {
-        longitude: epicenter.longitude,
-        validLongitude: epicenter.longitude >= 0 && epicenter.longitude <= 5,
-        latitude: epicenter.latitude,
-        validLatitude: epicenter.latitude >= 0 && epicenter.latitude <= 14,
-      });
-    }
-
-    // PRIORIDAD 1B: Último epicentro válido del backend (si el prop actual es inválido o null)
-    const lastValidEpicenter = lastValidBackendEpicenterRef.current;
-    if (showEpicenter && lastValidEpicenter && !isValidEpicenter(epicenter)) {
-      // Verificar si el último epicentro guardado no es demasiado viejo (menos de 60 segundos)
-      const savedTime = new Date(lastValidEpicenter.saved_at);
-      const currentTime = new Date();
-      const secondsDiff = (currentTime - savedTime) / 1000;
-
-      if (secondsDiff < 60) {
-        console.log(
-          `✅ CACHE HIT: Usando último epicentro válido guardado (hace ${secondsDiff.toFixed(1)}s, epicenter actual inválido):`,
-          lastValidEpicenter,
-        );
-        return {
-          longitude: lastValidEpicenter.longitude,
-          latitude: lastValidEpicenter.latitude,
-          calculated_at:
-            lastValidEpicenter.calculated_at || lastValidEpicenter.saved_at,
-          from_cached: true,
-        };
-      } else {
-        console.log(
-          `❌ CACHE EXPIRED: Último epicentro guardado es muy viejo (${secondsDiff.toFixed(1)}s > 60s), ignorando`,
-        );
-      }
-    }
-
-    // PRIORIDAD 2: Epicentro desde mapa de calor (solo si está activo, hay datos y no hay epicentro válido del backend O está estancado)
-    const shouldCalculateFromHeatmap =
-      showHeatmap &&
-      idwData &&
-      showEpicenter &&
-      (!isValidEpicenter(epicenter) || staleEpicenterCountRef.current > 3);
-
-    if (shouldCalculateFromHeatmap) {
-      console.log(
-        "Intentando calcular epicentro desde heatmap (backend inválido o estancado)...",
-      );
-      console.log("showHeatmap:", showHeatmap, "has IDW data:", !!idwData);
-      console.log("Backend epicenter valid:", isValidEpicenter(epicenter));
-      console.log("Stale count:", staleEpicenterCountRef.current);
-
-      const heatmapEpicenter = calculateEpicenterFromHeatmap(idwData);
-      if (heatmapEpicenter && isValidEpicenter(heatmapEpicenter)) {
-        console.log("✅ Usando epicentro desde heatmap:", heatmapEpicenter);
-        console.log("Comparación con backend epicenter:", epicenter);
-        return heatmapEpicenter;
-      } else if (heatmapEpicenter) {
-        console.log(
-          "❌ Epicentro calculado desde heatmap no válido (fuera de rango):",
-          heatmapEpicenter,
-        );
-        console.log("Coords check:", {
-          longitude: heatmapEpicenter.longitude,
-          validLongitude:
-            heatmapEpicenter.longitude >= 0 && heatmapEpicenter.longitude <= 5,
-          latitude: heatmapEpicenter.latitude,
-          validLatitude:
-            heatmapEpicenter.latitude >= 0 && heatmapEpicenter.latitude <= 14,
-        });
-      }
-      console.log(
-        "No se pudo calcular epicentro válido desde heatmap, usando sensores...",
-      );
-    } else if (!showEpicenter) {
-      console.log(
-        "⚠️ Heatmap disponible PERO showEpicenter es false, ignorando heatmap",
-      );
-    } else if (!showHeatmap) {
-      console.log(
-        "⚠️ showEpicenter es true PERO showHeatmap es false, no se puede calcular desde heatmap",
-      );
-    } else if (
-      staleEpicenterCountRef.current <= 3 &&
-      isValidEpicenter(epicenter)
-    ) {
-      console.log(
-        "⚠️ Backend epicenter is valid and not stale enough to override",
-      );
-    }
-
-    // PRIORIDAD 3: Epicentro calculado en frontend (ya sea del intervalo o calculado ahora)
-    if (
-      showEpicenter &&
-      frontendEpicenter &&
-      isValidEpicenter(frontendEpicenter)
-    ) {
-      console.log(
-        "✅ Usando epicentro del frontend (actualizado periódicamente):",
-        frontendEpicenter,
-      );
-      return frontendEpicenter;
-    }
-
-    // Fallback: calcular epicentro desde sensores si no hay epicentro del frontend
-    const shouldCalculateFromSensors =
-      sensorData.length > 0 &&
-      showEpicenter &&
-      (!isValidEpicenter(epicenter) || staleEpicenterCountRef.current > 3);
-
-    if (shouldCalculateFromSensors) {
-      console.log(
-        "Calculando epicentro desde sensores (backend y heatmap inválidos o estancados, sin epicentro del frontend)...",
-      );
-      console.log("Sensor count:", sensorData.length);
-      console.log("Backend epicenter valid:", isValidEpicenter(epicenter));
-      console.log("Stale count:", staleEpicenterCountRef.current);
-      console.log("Frontend epicenter available:", !!frontendEpicenter);
-
-      const calculatedEpicenter = calculateEpicenterFrontend(sensorData);
-      if (calculatedEpicenter && isValidEpicenter(calculatedEpicenter)) {
-        console.log(
-          "✅ Usando epicentro calculado desde sensores (fallback):",
-          calculatedEpicenter,
-        );
-        return calculatedEpicenter;
-      } else if (calculatedEpicenter) {
-        console.log(
-          "❌ Epicentro calculado desde sensores no válido (fuera de rango):",
-          calculatedEpicenter,
-        );
-      }
-    } else if (!showEpicenter) {
-      console.log(
-        "⚠️ Sensores disponibles PERO showEpicenter es false, ignorando cálculo",
-      );
-    } else if (
-      staleEpicenterCountRef.current <= 3 &&
-      isValidEpicenter(epicenter)
-    ) {
-      console.log(
-        "⚠️ Backend epicenter is valid and not stale enough to override with sensor calculation",
-      );
-    } else if (frontendEpicenter) {
-      console.log(
-        "⚠️ Frontend epicenter available but not valid or showEpicenter is false",
-      );
-    }
-
-    // Si no hay datos para calcular epicentro
-    console.log(
-      "❌ No hay datos suficientes para calcular epicentro o showEpicenter es false",
-    );
-    console.log("Resumen final:", {
-      showEpicenter,
-      epicenterProp: epicenter,
-      sensorDataLength: sensorData.length,
-      idwDataAvailable: !!idwData,
-      showHeatmap,
-      hasLastValidEpicenter: !!lastValidBackendEpicenterRef.current,
-      frontendEpicenterAvailable: !!frontendEpicenter,
-    });
-    return null;
-  })();
+  // No se calcula epicentro
 
   // Convertir coordenadas en metros a píxeles
   // NOTA: El sistema de coordenadas tiene (0,0) en la esquina INFERIOR DERECHA
@@ -1607,7 +965,7 @@ const FloorPlanMap = ({
     const adjustedXMeters = Math.max(0, Math.min(5, xMeters));
     const adjustedYMeters = Math.max(0, Math.min(14, yMeters));
 
-    // Log para debug de coordenadas de epicentro (solo si hay ajuste significativo)
+    // Log para debug de coordenadas (solo si hay ajuste significativo)
     if (
       microId === null &&
       (Math.abs(xMeters - adjustedXMeters) > 0.0001 ||
@@ -1630,46 +988,51 @@ const FloorPlanMap = ({
 
   // Debug: verificar coordenadas de sensores
   useEffect(() => {
-    // console.log("FloorPlanMap - Props recibidas:", {
-    //   sensorData_count: sensorData.length,
-    //   idwData: idwData
-    //     ? {
-    //             hasData: true,
-    //             xiType: Array.isArray(idwData.xi)
-    //               ? Array.isArray(idwData.xi[0])
-    //                 ? "2D"
-    //                 : "1D"
-    //               : "none",
-    //             yiType: Array.isArray(idwData.yi)
-    //               ? Array.isArray(idwData.yi[0])
-    //                 ? "2D"
-    //                 : "1D"
-    //               : "none",
-    //             ziShape: idwData.zi
-    //               ? `${idwData.zi.length}x${idwData.zi[0]?.length || 0}`
-    //               : "none",
-    //           }
-    //         : { hasData: false },
-    //       epicenter: !!epicenter,
-    //       showHeatmap,
-    //       showEpicenter,
-    //   });
+    console.log(
+      `[${new Date().toISOString()}] FloorPlanMap - Props recibidas:`,
+      {
+        sensorData_count: sensorData.length,
+        idwData: idwData
+          ? {
+              hasData: true,
+              xiType: Array.isArray(idwData.xi)
+                ? Array.isArray(idwData.xi[0])
+                  ? "2D"
+                  : "1D"
+                : "none",
+              yiType: Array.isArray(idwData.yi)
+                ? Array.isArray(idwData.yi[0])
+                  ? "2D"
+                  : "1D"
+                : "none",
+              ziShape: idwData.zi
+                ? `${idwData.zi.length}x${idwData.zi[0]?.length || 0}`
+                : "none",
+            }
+          : { hasData: false },
+        showHeatmap,
+        timestamp: new Date().toISOString(),
+      },
+    );
 
     if (sensorData.length > 0) {
-      // console.log(
-      //   "Coordenadas de sensores en FloorPlanMap:",
-      //   sensorData.map((s) => ({
-      //     micro_id: s.micro_id,
-      //     latitude: s.latitude,
-      //     longitude: s.longitude,
-      //     pixels: metersToPixels(s.longitude, s.latitude),
-      //     value: s.value,
-      //   })),
-      // );
+      console.log(
+        `[${new Date().toISOString()}] Coordenadas de sensores en FloorPlanMap:`,
+        sensorData.map((s) => ({
+          micro_id: s.micro_id,
+          latitude: s.latitude,
+          longitude: s.longitude,
+          pixels: metersToPixels(s.longitude, s.latitude),
+          value: s.value,
+          received_time: new Date().toISOString(),
+        })),
+      );
     } else {
-      // console.log("FloorPlanMap - sensorData vacío");
+      console.log(
+        `[${new Date().toISOString()}] FloorPlanMap - sensorData vacío`,
+      );
     }
-  }, [sensorData, idwData, epicenter, showHeatmap, showEpicenter]);
+  }, [sensorData, idwData, showHeatmap]);
 
   // Calcular estadísticas del mapa de calor (mínimo y máximo)
   useEffect(() => {
@@ -1815,35 +1178,6 @@ const FloorPlanMap = ({
                   title="Esquina superior izquierda (5,14)"
                 ></div>
               </div>
-
-              {/* Epicentro - usar posición efectiva (heatmap, backend o frontend) */}
-              {effectiveEpicenter && (
-                <div
-                  className="absolute inset-0 isolate"
-                  style={{ zIndex: 100 }}
-                >
-                  <EpicenterMarker
-                    x={
-                      metersToPixels(
-                        effectiveEpicenter.longitude,
-                        effectiveEpicenter.latitude,
-                      ).x
-                    }
-                    y={
-                      metersToPixels(
-                        effectiveEpicenter.longitude,
-                        effectiveEpicenter.latitude,
-                      ).y
-                    }
-                    calculated_at={effectiveEpicenter.calculated_at}
-                    frontend_calculated={
-                      effectiveEpicenter.frontend_calculated ||
-                      effectiveEpicenter.from_heatmap
-                    }
-                    max_sensor={effectiveEpicenter.max_sensor}
-                  />
-                </div>
-              )}
             </div>
           </div>
         </div>

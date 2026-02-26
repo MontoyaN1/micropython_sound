@@ -219,6 +219,45 @@ start_services() {
     fi
 }
 
+dev_services() {
+    local compose_file="$1"
+    local env_file="$2"
+    local services="$3"
+    local environment="$4"
+
+    print_header "Iniciando servicios en modo desarrollo (sin reconstruir imágenes)"
+
+    if [ -z "$services" ]; then
+        if [ "$environment" = "prod" ]; then
+            services="nginx backend cache"
+            print_info "Iniciando servicios de producción: $services"
+        else
+            services="backend frontend cache"
+            print_info "Iniciando servicios principales: $services"
+        fi
+    fi
+
+    if [ -n "$env_file" ]; then
+        if docker-compose -f "$compose_file" --env-file "$env_file" up $services; then
+            print_success "Servicios iniciados en modo desarrollo (ejecutando en primer plano): $services"
+            print_info "Los cambios en el código se reflejarán automáticamente con hot reload"
+            print_info "Presione Ctrl+C para detener los servicios"
+        else
+            print_error "Error iniciando servicios"
+            exit 1
+        fi
+    else
+        if docker-compose -f "$compose_file" up $services; then
+            print_success "Servicios iniciados en modo desarrollo (ejecutando en primer plano): $services"
+            print_info "Los cambios en el código se reflejarán automáticamente con hot reload"
+            print_info "Presione Ctrl+C para detener los servicios"
+        else
+            print_error "Error iniciando servicios"
+            exit 1
+        fi
+    fi
+}
+
 stop_services() {
     local compose_file="$1"
     print_header "Deteniendo servicios"
@@ -280,7 +319,7 @@ show_status() {
     echo -e "\n${BLUE}Verificando endpoints:${NC}"
 
     # Nginx (si está configurado)
-    if [ "$ENVIRONMENT" = "prod" ]; then
+    if [ "$environment" = "prod" ]; then
         if curl -s -f http://localhost:8082/health > /dev/null; then
             print_success "Nginx (http://localhost:8082) - ONLINE"
         else
@@ -288,19 +327,29 @@ show_status() {
         fi
     fi
 
-    # Backend
-    if curl -s -f http://localhost:18081/health > /dev/null; then
-        print_success "Backend (http://localhost:18081) - ONLINE"
+    # Backend - puertos diferentes según entorno
+    if [ "$environment" = "prod" ]; then
+        # En producción, backend expuesto en 18081 directamente
+        if curl -s -f http://localhost:18081/health > /dev/null; then
+            print_success "Backend (http://localhost:18081) - ONLINE"
+        else
+            print_error "Backend (http://localhost:18081) - OFFLINE"
+        fi
     else
-        print_error "Backend (http://localhost:18081) - OFFLINE"
+        # En desarrollo, backend en puerto 8000
+        if curl -s -f http://localhost:8000/health > /dev/null; then
+            print_success "Backend (http://localhost:8000) - ONLINE"
+        else
+            print_error "Backend (http://localhost:8000) - OFFLINE"
+        fi
     fi
 
-    # Frontend (solo en desarrollo)
-    if [ "$ENVIRONMENT" != "prod" ]; then
-        if curl -s -f http://localhost:13001 > /dev/null; then
-            print_success "Frontend (http://localhost:13001) - ONLINE"
+    # Frontend (solo en desarrollo) - puerto 3000
+    if [ "$environment" != "prod" ]; then
+        if curl -s -f http://localhost:3000 > /dev/null; then
+            print_success "Frontend (http://localhost:3000) - ONLINE"
         else
-            print_error "Frontend (http://localhost:13001) - OFFLINE"
+            print_error "Frontend (http://localhost:3000) - OFFLINE"
         fi
     fi
 
@@ -458,6 +507,7 @@ Uso: ./deploy.sh [COMANDO] [ENTORNO]
 
 Comandos disponibles:
   start        Iniciar todos los servicios
+  dev          Iniciar servicios en modo desarrollo (primer plano, hot reload)
   stop         Detener todos los servicios
   restart      Reiniciar todos los servicios
   status       Mostrar estado de los servicios
@@ -465,7 +515,7 @@ Comandos disponibles:
   build        Construir imágenes Docker
   update       Actualizar sistema (rebuild)
   backup       Crear backup de configuración
-  cleanup      Limpiar contenederos, imágenes y volúmenes no utilizados
+  cleanup      Limpiar contenedores, imágenes y volúmenes no utilizados
   help         Mostrar esta ayuda
 
 Entornos disponibles:
@@ -481,7 +531,8 @@ Servicios disponibles:
   - cache     (DragonflyDB)
 
 Ejemplos:
-  ./deploy.sh start          # Iniciar desarrollo
+  ./deploy.sh start          # Iniciar desarrollo (con build)
+  ./deploy.sh dev            # Iniciar desarrollo (hot reload, primer plano)
   ./deploy.sh start prod     # Iniciar producción (con nginx)
   ./deploy.sh logs backend   # Ver logs del backend
   ./deploy.sh status prod    # Ver estado de producción
@@ -489,9 +540,9 @@ Ejemplos:
 
 Accesos después del despliegue:
   Desarrollo local:
-    Frontend React:    http://localhost:13001
-    Backend API:       http://localhost:18081
-    WebSocket:         ws://localhost:18081/ws/realtime
+    Frontend React:    http://localhost:3000
+    Backend API:       http://localhost:8000
+    WebSocket:         ws://localhost:8000/ws/realtime
 
   Producción (con nginx):
     Aplicación completa: http://localhost:8082
@@ -511,6 +562,12 @@ case "${1:-help}" in
         start_services "$COMPOSE_FILE" "$ENV_FILE" "$3" "$ENVIRONMENT"
         sleep 5
         show_status "$COMPOSE_FILE" "$ENVIRONMENT"
+        ;;
+    dev)
+        check_dependencies
+        check_environment "$ENV_FILE"
+        check_config_files
+        dev_services "$COMPOSE_FILE" "$ENV_FILE" "$3" "$ENVIRONMENT"
         ;;
     stop)
         check_dependencies

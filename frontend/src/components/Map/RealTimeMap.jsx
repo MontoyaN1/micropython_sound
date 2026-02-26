@@ -273,7 +273,13 @@ const RealTimeMap = ({ sensorData, idwData, epicenter }) => {
                   <div className="flex justify-between">
                     <span className="text-primary-600">Actualizado:</span>
                     <span className="text-sm">
-                      {new Date(sensor.last_update).toLocaleTimeString("es-ES")}
+                      {(() => {
+                        const date = new Date(sensor.last_update);
+                        date.setHours(date.getHours() - 5);
+                        return date.toLocaleTimeString("es-CO", {
+                          hour12: false,
+                        });
+                      })()}
                     </span>
                   </div>
                 </div>
@@ -309,9 +315,13 @@ const RealTimeMap = ({ sensorData, idwData, epicenter }) => {
                   <div className="flex justify-between">
                     <span className="text-primary-600">Calculado:</span>
                     <span className="text-sm">
-                      {new Date(epicenter.calculated_at).toLocaleTimeString(
-                        "es-ES",
-                      )}
+                      {(() => {
+                        const date = new Date(epicenter.calculated_at);
+                        date.setHours(date.getHours() - 5);
+                        return date.toLocaleTimeString("es-CO", {
+                          hour12: false,
+                        });
+                      })()}
                     </span>
                   </div>
                 </div>
