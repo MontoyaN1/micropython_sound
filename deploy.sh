@@ -29,6 +29,14 @@ fi
 # Siempre usar .env (compatible con EasyPanel)
 ENV_FILE=".env"
 
+# Determinar si usar nginx en desarrollo
+if [ "$ENVIRONMENT" = "dev" ] && [ "$3" = "true" ]; then
+    NGINX_DEV_ENABLED=true
+    print_info "Modo desarrollo con nginx habilitado"
+else
+    NGINX_DEV_ENABLED=false
+fi
+
 # Funciones de utilidad
 print_header() {
     echo -e "${BLUE}========================================${NC}"
@@ -170,6 +178,17 @@ build_images() {
             print_error "Error construyendo el frontend"
             exit 1
         fi
+
+        # Construir nginx-dev si está habilitado
+        if [ "$NGINX_DEV_ENABLED" = true ]; then
+            print_info "Construyendo imagen de nginx-dev..."
+            if docker-compose -f "$compose_file" build nginx-dev; then
+                print_success "Nginx-dev construido exitosamente"
+            else
+                print_error "Error construyendo nginx-dev"
+                exit 1
+            fi
+        fi
     fi
 
     # Construir cache (siempre)
@@ -197,8 +216,13 @@ start_services() {
             services="nginx backend cache"
             print_info "Iniciando servicios de producción: $services"
         else
-            services="backend frontend cache"
-            print_info "Iniciando servicios principales: $services"
+            if [ "$NGINX_DEV_ENABLED" = true ]; then
+                services="nginx-dev backend frontend cache"
+                print_info "Iniciando servicios de desarrollo con nginx: $services"
+            else
+                services="backend frontend cache"
+                print_info "Iniciando servicios principales: $services"
+            fi
         fi
     fi
 
@@ -232,8 +256,13 @@ dev_services() {
             services="nginx backend cache"
             print_info "Iniciando servicios de producción: $services"
         else
-            services="backend frontend cache"
-            print_info "Iniciando servicios principales: $services"
+            if [ "$NGINX_DEV_ENABLED" = true ]; then
+                services="nginx-dev backend frontend cache"
+                print_info "Iniciando servicios de desarrollo con nginx: $services"
+            else
+                services="backend frontend cache"
+                print_info "Iniciando servicios principales: $services"
+            fi
         fi
     fi
 
@@ -281,7 +310,11 @@ restart_services() {
     if [ "$environment" = "prod" ]; then
         services="nginx backend cache"
     else
-        services="backend frontend cache"
+        if [ "$NGINX_DEV_ENABLED" = true ]; then
+            services="nginx-dev backend frontend cache"
+        else
+            services="backend frontend cache"
+        fi
     fi
 
     if [ -n "$env_file" ]; then
@@ -325,6 +358,12 @@ show_status() {
         else
             print_warning "Nginx (http://localhost:8082) - OFFLINE"
         fi
+    elif [ "$NGINX_DEV_ENABLED" = true ]; then
+        if curl -s -f http://localhost:8080/health > /dev/null; then
+            print_success "Nginx-dev (http://localhost:8080) - ONLINE"
+        else
+            print_warning "Nginx-dev (http://localhost:8080) - OFFLINE"
+        fi
     fi
 
     # Backend - puertos diferentes según entorno
@@ -336,20 +375,39 @@ show_status() {
             print_error "Backend (http://localhost:18081) - OFFLINE"
         fi
     else
-        # En desarrollo, backend en puerto 8000
-        if curl -s -f http://localhost:8000/health > /dev/null; then
-            print_success "Backend (http://localhost:8000) - ONLINE"
+        if [ "$NGINX_DEV_ENABLED" = true ]; then
+            # En desarrollo con nginx, backend accesible a través de /api
+            if curl -s -f http://localhost:8080/api/health > /dev/null; then
+                print_success "Backend (http://localhost:8080/api) - ONLINE"
+            else
+                print_error "Backend (http://localhost:8080/api) - OFFLINE"
+            fi
         else
-            print_error "Backend (http://localhost:8000) - OFFLINE"
+            # En desarrollo sin nginx, backend en puerto 8000
+            if curl -s -f http://localhost:8000/health > /dev/null; then
+                print_success "Backend (http://localhost:8000) - ONLINE"
+            else
+                print_error "Backend (http://localhost:8000) - OFFLINE"
+            fi
         fi
     fi
 
-    # Frontend (solo en desarrollo) - puerto 3000
+    # Frontend (solo en desarrollo)
     if [ "$environment" != "prod" ]; then
-        if curl -s -f http://localhost:3000 > /dev/null; then
-            print_success "Frontend (http://localhost:3000) - ONLINE"
+        if [ "$NGINX_DEV_ENABLED" = true ]; then
+            # En desarrollo con nginx, frontend accesible a través de nginx
+            if curl -s -f http://localhost:8080 > /dev/null; then
+                print_success "Frontend (http://localhost:8080) - ONLINE"
+            else
+                print_error "Frontend (http://localhost:8080) - OFFLINE"
+            fi
         else
-            print_error "Frontend (http://localhost:3000) - OFFLINE"
+            # En desarrollo sin nginx, frontend en puerto 3000
+            if curl -s -f http://localhost:3000 > /dev/null; then
+                print_success "Frontend (http://localhost:3000) - ONLINE"
+            else
+                print_error "Frontend (http://localhost:3000) - OFFLINE"
+            fi
         fi
     fi
 
@@ -447,8 +505,13 @@ update_system() {
         services="nginx backend cache"
         print_info "Actualizando servicios de producción: $services"
     else
-        services="backend frontend cache"
-        print_info "Actualizando servicios: $services"
+        if [ "$NGINX_DEV_ENABLED" = true ]; then
+            services="nginx-dev backend frontend cache"
+            print_info "Actualizando servicios de desarrollo con nginx: $services"
+        else
+            services="backend frontend cache"
+            print_info "Actualizando servicios: $services"
+        fi
     fi
 
     print_info "Reconstruyendo servicios..."
@@ -522,10 +585,20 @@ Entornos disponibles:
   dev          Desarrollo (por defecto) - usa docker-compose.yml
   prod         Producción - usa docker-compose.prod.yml
 
+Opciones para desarrollo:
+  true         Habilitar nginx en desarrollo (tercer parámetro)
+               Ejemplo: ./deploy.sh start dev true
+
+Parámetros:
+  COMANDO      Comando a ejecutar (start, dev, stop, etc.)
+  ENTORNO      Entorno (dev o prod)
+  [NGINX]      Solo para desarrollo: "true" para habilitar nginx-dev
+
 Nota: Ambos entornos usan el mismo archivo .env (compatible con EasyPanel)
 
 Servicios disponibles:
   - nginx     (Reverse Proxy - solo en producción)
+  - nginx-dev (Reverse Proxy para desarrollo - opcional)
   - backend   (FastAPI + WebSocket + MQTT)
   - frontend  (React + Leaflet)
   - cache     (DragonflyDB)
@@ -533,16 +606,23 @@ Servicios disponibles:
 Ejemplos:
   ./deploy.sh start          # Iniciar desarrollo (con build)
   ./deploy.sh dev            # Iniciar desarrollo (hot reload, primer plano)
+  ./deploy.sh start dev true # Iniciar desarrollo con nginx (para usar /api)
+  ./deploy.sh dev true       # Iniciar desarrollo con nginx (hot reload)
   ./deploy.sh start prod     # Iniciar producción (con nginx)
   ./deploy.sh logs backend   # Ver logs del backend
   ./deploy.sh status prod    # Ver estado de producción
   ./deploy.sh cleanup        # Limpiar recursos Docker
 
 Accesos después del despliegue:
-  Desarrollo local:
+  Desarrollo local (sin nginx):
     Frontend React:    http://localhost:3000
     Backend API:       http://localhost:8000
     WebSocket:         ws://localhost:8000/ws/realtime
+
+  Desarrollo local (con nginx):
+    Aplicación completa: http://localhost:8080
+    API:                 http://localhost:8080/api
+    WebSocket:           ws://localhost:8080/ws/realtime
 
   Producción (con nginx):
     Aplicación completa: http://localhost:8082

@@ -26,7 +26,7 @@ const RealTimePage = () => {
   const [showGrid, setShowGrid] = useState(true);
   const [colorScheme, setColorScheme] = useState("redyellowgreen");
   const [opacity, setOpacity] = useState(0.6);
-  const [idwPower, setIdwPower] = useState(2);
+  const [idwPower, setIdwPower] = useState(4);
 
   const [stats, setStats] = useState({
     avgNoise: 0,
@@ -342,7 +342,9 @@ const RealTimePage = () => {
                 <FloorPlanMap
                   sensorData={sensorData}
                   idwData={showHeatmap ? idwData : null}
+                  epicenter={epicenter}
                   showHeatmap={showHeatmap}
+                  showEpicenter={showEpicenter}
                   showGrid={showGrid}
                   colorScheme={colorScheme}
                   opacity={opacity}
@@ -392,6 +394,25 @@ const RealTimePage = () => {
                     <div className="w-3 h-3 rounded-full bg-blue-500"></div>
                     <div className="w-3 h-3 rounded-full bg-cyan-500"></div>
                     <div className="w-3 h-3 rounded-full bg-lime-500"></div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between p-3 bg-primary-50 rounded-lg">
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={showEpicenter}
+                      onChange={(e) => setShowEpicenter(e.target.checked)}
+                      className="rounded text-accent-500"
+                    />
+                    <span className="text-sm font-medium">Zona Epicentro</span>
+                    <span className="text-xs text-primary-500 ml-1">
+                      {epicenter?.zone_type ? "✓ Zona" : "✗ Sin datos"}
+                    </span>
+                  </label>
+                  <div className="flex items-center space-x-1">
+                    <div className="w-3 h-3 rounded-full bg-red-800"></div>
+                    <div className="w-3 h-3 rounded-full bg-red-600"></div>
                   </div>
                 </div>
 

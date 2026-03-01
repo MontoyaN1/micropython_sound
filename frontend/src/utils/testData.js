@@ -106,9 +106,45 @@ export const testIdwData = {
   calculated_at: new Date().toISOString(),
 };
 
-// Epicentro de prueba
+// Epicentro extendido de prueba con zona y top sensores
 export const testEpicenter = {
   latitude: 6.5,
   longitude: 2.5,
+  max_sensor_latitude: 5.0, // E255 (mayor valor)
+  max_sensor_longitude: 3.5,
+  max_value: 60.5,
+  sensor_count: 6,
   calculated_at: new Date().toISOString(),
+  fallback: false,
+  top_sensors: [
+    {
+      micro_id: "E255",
+      latitude: 5.0,
+      longitude: 3.5,
+      value: 60.5,
+      rank: 1,
+      location_name: "Oficina",
+    },
+    {
+      micro_id: "E4",
+      latitude: 11.0,
+      longitude: 1.5,
+      value: 55.1,
+      rank: 2,
+      location_name: "Sala - lavadero",
+    },
+    {
+      micro_id: "E2",
+      latitude: 2.0,
+      longitude: 3.5,
+      value: 52.3,
+      rank: 3,
+      location_name: "Exterior 2",
+    },
+  ],
+  zone_type: "circle",
+  zone_radius: 5.675, // distancia máxima + 0.5m margen
+  zone_center_latitude: 6.0, // promedio latitudes top sensores
+  zone_center_longitude: 2.833, // promedio longitudes top sensores
+  zone_vertices: null,
 };

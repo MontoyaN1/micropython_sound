@@ -90,11 +90,14 @@ const colorPalettes = {
     [1.0, 0.0, 0.0], // Rojo puro
   ],
   redyellowgreen: [
-    [0.0, 0.8, 0.0], // Verde intenso (baja intensidad)
+    [0.8, 1.0, 0.8], // Verde muy claro (valores más bajos)
+    [0.6, 1.0, 0.6], // Verde claro
+    [0.0, 0.9, 0.0], // Verde medio
     [0.5, 1.0, 0.0], // Verde amarillento
-    [1.0, 1.0, 0.0], // Amarillo puro (media intensidad)
-    [1.0, 0.6, 0.0], // Naranja
-    [1.0, 0.0, 0.0], // Rojo puro (alta intensidad)
+    [1.0, 1.0, 0.0], // Amarillo puro (valores medios)
+    [1.0, 0.7, 0.0], // Naranja
+    [1.0, 0.4, 0.0], // Naranja-rojo
+    [1.0, 0.0, 0.0], // Rojo puro (valores más altos)
   ],
 };
 
@@ -282,9 +285,13 @@ const HeatmapLayer = memo(
 
       for (let i = 0; i < lutSize; i++) {
         const normalizedValue = i / (lutSize - 1);
+        let color;
+
+        // Interpolación lineal para todos los esquemas
         const index = Math.floor(normalizedValue * (palette.length - 1));
         const colorIdx = Math.max(0, Math.min(index, palette.length - 1));
-        const color = palette[colorIdx];
+        color = palette[colorIdx];
+
         lut[i] =
           `rgba(${Math.round(color[0] * 255)}, ${Math.round(color[1] * 255)}, ${Math.round(color[2] * 255)}, ${opacity})`;
       }
@@ -325,191 +332,112 @@ const HeatmapLayer = memo(
 
       const startTime = performance.now();
 
-      // Paso en metros para cubrir todo el plano
-      const xStep = PLAN_WIDTH / (targetCols - 1);
-      const yStep = PLAN_HEIGHT / (targetRows - 1);
+      // Calcular límites reales de los datos del backend a partir de xi, yi
+      let minX = Infinity,
+        maxX = -Infinity;
+      let minY = Infinity,
+        maxY = -Infinity;
 
-      // Primero, necesitamos convertir los datos IDW existentes a un formato que podamos interpolar
-      // Los datos IDW vienen como arrays 2D, los convertimos a arrays 1D de puntos
-      const points = [];
-      const values = [];
-
-      for (let i = 0; i < zi.length; i++) {
-        for (let j = 0; j < zi[i].length; j++) {
-          const xVal = xi[i]?.[j] || xi[0]?.[j] || 0;
-          const yVal = yi[i]?.[j] || yi[i]?.[0] || 0;
-          const zVal = zi[i][j];
-
-          if (zVal !== null && zVal !== undefined) {
-            points.push([xVal, yVal]);
-            values.push(zVal);
+      for (let i = 0; i < xi.length; i++) {
+        for (let j = 0; j < xi[i].length; j++) {
+          const xVal = xi[i][j];
+          const yVal = yi[i][j];
+          if (xVal !== null && xVal !== undefined) {
+            minX = Math.min(minX, xVal);
+            maxX = Math.max(maxX, xVal);
+          }
+          if (yVal !== null && yVal !== undefined) {
+            minY = Math.min(minY, yVal);
+            maxY = Math.max(maxY, yVal);
           }
         }
       }
 
-      // Si no hay puntos suficientes, retornar grilla vacía
-      if (points.length < 3) {
-        // console.log(
-        //   "HeatmapLayer - No hay suficientes puntos para interpolación bilineal",
-        // );
-        return { fullXi, fullYi, fullZi: [] };
+      // Si no se encontraron límites válidos, usar plano completo
+      if (!isFinite(minX) || !isFinite(maxX)) {
+        minX = 0;
+        maxX = PLAN_WIDTH;
+      }
+      if (!isFinite(minY) || !isFinite(maxY)) {
+        minY = 0;
+        maxY = PLAN_HEIGHT;
       }
 
-      // Preparar estructura para interpolación bilineal eficiente
-      // Ordenar puntos por coordenadas para búsqueda más rápida
-      const sortedPoints = points
-        .map((point, index) => ({
-          x: point[0],
-          y: point[1],
-          value: values[index],
-        }))
-        .sort((a, b) => {
-          if (a.x !== b.x) return a.x - b.x;
-          return a.y - b.y;
-        });
+      // Asegurar que haya rango positivo para evitar división por cero
+      let xRange = maxX - minX;
+      let yRange = maxY - minY;
+      if (xRange <= 0) xRange = PLAN_WIDTH;
+      if (yRange <= 0) yRange = PLAN_HEIGHT;
 
-      // Crear grid espacial local para búsqueda rápida de vecinos
-      const gridCellSize = 0.5; // metros por celda
-      const spatialGrid = {};
+      // Paso en metros para cubrir todo el plano
+      const xStep = PLAN_WIDTH / (targetCols - 1);
+      const yStep = PLAN_HEIGHT / (targetRows - 1);
 
-      // Preprocesar: asignar cada punto a una celda del grid
-      for (const point of sortedPoints) {
-        const cellX = Math.floor(point.x / gridCellSize);
-        const cellY = Math.floor(point.y / gridCellSize);
-        const cellKey = `${cellX},${cellY}`;
-
-        if (!spatialGrid[cellKey]) {
-          spatialGrid[cellKey] = [];
-        }
-        spatialGrid[cellKey].push(point);
-      }
-
-      // Crear grilla densa que cubre TODO el plano con interpolación bilineal
-      // OPTIMIZACIÓN: Reducir iteraciones y usar grid espacial para búsqueda O(1)
+      // Crear grilla densa que cubra TODO el plano con interpolación bilineal
       for (let i = 0; i < targetRows; i++) {
         fullXi[i] = [];
         fullYi[i] = [];
         fullZi[i] = [];
 
-        // Asegurar que las coordenadas Y estén dentro del rango [0, 14]
-        const yMeters = Math.max(0, Math.min(14, i * yStep));
+        // Coordenada Y en el plano (0-14m)
+        const yMeters = Math.max(0, Math.min(PLAN_HEIGHT, i * yStep));
 
         for (let j = 0; j < targetCols; j++) {
-          // Coordenadas en metros que cubren TODO el plano
-          // Asegurar que las coordenadas X estén dentro del rango [0, 5]
-          const xMeters = Math.max(0, Math.min(5, j * xStep));
+          // Coordenada X en el plano (0-5m)
+          const xMeters = Math.max(0, Math.min(PLAN_WIDTH, j * xStep));
 
           fullXi[i][j] = xMeters;
           fullYi[i][j] = yMeters;
 
-          // OPTIMIZACIÓN: Búsqueda rápida usando grid espacial local
-          const cellX = Math.floor(xMeters / gridCellSize);
-          const cellY = Math.floor(yMeters / gridCellSize);
+          // Convertir coordenadas del plano (0-5m, 0-14m) al rango de los datos del backend
+          const xBackend = minX + (xMeters / PLAN_WIDTH) * xRange;
+          const yBackend = minY + (yMeters / PLAN_HEIGHT) * yRange;
 
-          const neighbors = [];
-          const searchRadius = 1; // Buscar solo en celdas adyacentes (radio 1)
+          // INTERPOLACIÓN BILINEAL DIRECTA de la grilla original
+          const origGridCols = zi[0]?.length || 0;
+          const origGridRows = zi.length || 0;
 
-          // Buscar en celdas vecinas (incluyendo la celda actual)
-          for (let dx = -searchRadius; dx <= searchRadius; dx++) {
-            for (let dy = -searchRadius; dy <= searchRadius; dy++) {
-              const neighborCellKey = `${cellX + dx},${cellY + dy}`;
-              const cellPoints = spatialGrid[neighborCellKey];
+          if (origGridCols > 0 && origGridRows > 0) {
+            // Mapear coordenadas del backend a índices en la grilla original
+            // Clamping de índices para evitar valores fuera de rango
+            const colIndex = Math.max(
+              0,
+              Math.min(
+                origGridCols - 1,
+                ((xBackend - minX) / xRange) * (origGridCols - 1),
+              ),
+            );
+            const rowIndex = Math.max(
+              0,
+              Math.min(
+                origGridRows - 1,
+                ((yBackend - minY) / yRange) * (origGridRows - 1),
+              ),
+            );
 
-              if (cellPoints) {
-                // Evaluar solo los puntos en esta celda
-                for (const point of cellPoints) {
-                  const distanceSquared =
-                    (xMeters - point.x) ** 2 + (yMeters - point.y) ** 2;
-                  const distance = Math.sqrt(distanceSquared);
+            const col1 = Math.floor(colIndex);
+            const col2 = Math.min(col1 + 1, origGridCols - 1);
+            const row1 = Math.floor(rowIndex);
+            const row2 = Math.min(row1 + 1, origGridRows - 1);
 
-                  // Mantener solo los 4 puntos más cercanos
-                  if (neighbors.length < 4) {
-                    neighbors.push({ distance, point });
-                    // Ordenar cuando tenemos 4 puntos
-                    if (neighbors.length === 4) {
-                      neighbors.sort((a, b) => a.distance - b.distance);
-                    }
-                  } else if (distanceSquared < neighbors[3].distanceSquared) {
-                    // Reemplazar el cuarto punto si encontramos uno más cercano
-                    neighbors[3] = {
-                      distance: Math.sqrt(distanceSquared),
-                      distanceSquared,
-                      point,
-                    };
-                    neighbors.sort((a, b) => a.distance - b.distance);
-                  }
-                }
-              }
-            }
-          }
+            const tCol = colIndex - col1;
+            const tRow = rowIndex - row1;
 
-          // Si no encontramos suficientes vecinos, buscar en radio más amplio
-          if (neighbors.length < 4) {
-            // Búsqueda de emergencia en todo el conjunto de puntos
-            // Pero limitada a los primeros 50 puntos más cercanos en coordenada X
-            const searchWindow = Math.min(sortedPoints.length, 50);
-            for (let k = 0; k < searchWindow; k++) {
-              const point = sortedPoints[k];
-              const distanceSquared =
-                (xMeters - point.x) ** 2 + (yMeters - point.y) ** 2;
-              const distance = Math.sqrt(distanceSquared);
+            // Obtener valores de los 4 puntos más cercanos en la grilla original
+            const v11 = zi[row1]?.[col1] || 0;
+            const v12 = zi[row1]?.[col2] || 0;
+            const v21 = zi[row2]?.[col1] || 0;
+            const v22 = zi[row2]?.[col2] || 0;
 
-              if (neighbors.length < 4) {
-                neighbors.push({ distance, point });
-              } else if (distance < neighbors[3].distance) {
-                neighbors[3] = { distance, point };
-              }
-            }
-            if (neighbors.length > 1) {
-              neighbors.sort((a, b) => a.distance - b.distance);
-            }
-          }
-
-          // Interpolación bilineal basada en los puntos más cercanos
-          if (neighbors.length >= 4) {
-            // Usar los 4 puntos más cercanos para interpolación bilineal
-            let totalWeight = 0;
-            let weightedSum = 0;
-
-            for (const { distance, point } of neighbors.slice(0, 4)) {
-              const safeDistance = Math.max(distance, 0.01);
-              const weight = 1.0 / safeDistance ** idwPower;
-              weightedSum += weight * point.value;
-              totalWeight += weight;
-            }
-
-            fullZi[i][j] = totalWeight > 0 ? weightedSum / totalWeight : 0;
-          } else if (neighbors.length > 0) {
-            // Si hay menos de 4 puntos, usar interpolación con los disponibles
-            let totalWeight = 0;
-            let weightedSum = 0;
-
-            for (const { distance, point } of neighbors) {
-              const safeDistance = Math.max(distance, 0.01);
-              const weight = 1.0 / safeDistance ** idwPower;
-              weightedSum += weight * point.value;
-              totalWeight += weight;
-            }
-
-            fullZi[i][j] = weightedSum / totalWeight;
+            // Interpolación bilineal
+            const v1 = v11 * (1 - tCol) + v12 * tCol;
+            const v2 = v21 * (1 - tCol) + v22 * tCol;
+            fullZi[i][j] = v1 * (1 - tRow) + v2 * tRow;
           } else {
-            // Sin puntos cercanos, usar valor predeterminado
-            fullZi[i][j] = 40; // Valor de base para ruido ambiental
+            fullZi[i][j] = null; // Sin datos
           }
-
-          // Asegurar que el valor esté dentro de un rango razonable
-          if (fullZi[i][j] < 30) fullZi[i][j] = 30;
-          if (fullZi[i][j] > 120) fullZi[i][j] = 120;
         }
       }
-
-      // console.log("HeatmapLayer - Grilla creada con interpolación bilineal:", {
-      //   puntos: points.length,
-      //   dimensiones: `${targetRows}x${targetCols}`,
-      //   cubreTodoElPlano: true,
-      //   metodo: "Grid Espacial Optimizado (15x42 celdas, búsqueda O(1))",
-      //   tiempo: `${performance.now() - startTime}ms`,
-      // });
 
       return { fullXi, fullYi, fullZi };
     };
@@ -559,7 +487,7 @@ const HeatmapLayer = memo(
       return createFullPlaneGrid(normalizedXi, normalizedYi, normalizedZi);
     }, [normalizedXi, normalizedYi, normalizedZi]);
 
-    // Memoizar estadísticas de la grilla (min/max)
+    // Memoizar estadísticas de la grilla (min/max) basado en datos reales
     const { minVal, maxVal, valueRange } = useMemo(() => {
       if (!fullZi || fullZi.length === 0) {
         return { minVal: 0, maxVal: 0, valueRange: 0 };
@@ -571,7 +499,7 @@ const HeatmapLayer = memo(
       for (let i = 0; i < fullZi.length; i++) {
         for (let j = 0; j < fullZi[i].length; j++) {
           const val = fullZi[i][j];
-          if (val !== null && val !== undefined) {
+          if (val !== null && val !== undefined && !isNaN(val)) {
             if (val < minVal) minVal = val;
             if (val > maxVal) maxVal = val;
           }
@@ -778,7 +706,7 @@ const HeatmapLayer = memo(
           const v2 = v21 * (1 - tCol) + v22 * tCol;
           const finalValue = v1 * (1 - tRow) + v2 * tRow;
 
-          // Normalizar valor
+          // Normalizar valor usando min/max dinámicos basados en datos reales
           const normalizedVal = (finalValue - minVal) / valueRange;
 
           // Obtener color
@@ -903,10 +831,132 @@ const GridOverlay = ({ showGrid }) => {
   return <>{gridLines}</>;
 };
 
+const EpicenterZone = ({ epicenter, showEpicenter, metersToPixels }) => {
+  console.log("EpicenterZone - Props recibidas:", {
+    showEpicenter,
+    epicenter,
+    zone_type: epicenter?.zone_type,
+    has_epicenter: !!epicenter,
+    epicenter_keys: epicenter ? Object.keys(epicenter) : [],
+    epicenter_full: epicenter,
+  });
+
+  if (!showEpicenter || !epicenter || epicenter.zone_type !== "circle") {
+    console.log("EpicenterZone - No se renderiza porque:", {
+      showEpicenter,
+      has_epicenter: !!epicenter,
+      zone_type: epicenter?.zone_type,
+      fails_showEpicenter: !showEpicenter,
+      fails_epicenter: !epicenter,
+      fails_zone_type: epicenter && epicenter.zone_type !== "circle",
+    });
+    return null;
+  }
+
+  console.log("EpicenterZone - Datos de zona:", {
+    zone_center_longitude: epicenter.zone_center_longitude,
+    zone_center_latitude: epicenter.zone_center_latitude,
+    zone_radius: epicenter.zone_radius,
+    top_sensors_count: epicenter.top_sensors ? epicenter.top_sensors.length : 0,
+    top_sensors: epicenter.top_sensors,
+  });
+
+  const center = metersToPixels(
+    epicenter.zone_center_longitude,
+    epicenter.zone_center_latitude,
+  );
+
+  const avgPixelsPerMeter = (METERS_TO_PIXELS_X + METERS_TO_PIXELS_Y) / 2;
+
+  // Limitar centro para que esté dentro del plano (0-5m, 0-14m)
+  const centerX = Math.max(
+    0,
+    Math.min(epicenter.zone_center_longitude, PLAN_WIDTH),
+  );
+  const centerY = Math.max(
+    0,
+    Math.min(epicenter.zone_center_latitude, PLAN_HEIGHT),
+  );
+
+  // Aplicar factor de escala al radio original antes de limitar
+  const scaledRadiusMeters = epicenter.zone_radius * 0.5; // Reducir a la mitad
+
+  // Limitar radio para que no exceda los bordes del plano
+  const maxRadiusX = Math.min(centerX, PLAN_WIDTH - centerX); // distancia a bordes horizontales
+  const maxRadiusY = Math.min(centerY, PLAN_HEIGHT - centerY); // distancia a bordes verticales
+  const maxRadiusMeters = Math.min(maxRadiusX, maxRadiusY);
+  const limitedRadiusMeters = Math.min(scaledRadiusMeters, maxRadiusMeters);
+
+  // Radio mínimo para que sea visible (0.5 metros)
+  const minRadiusMeters = 0.5;
+  const finalRadiusMeters = Math.max(minRadiusMeters, limitedRadiusMeters);
+
+  const radiusPixels = finalRadiusMeters * avgPixelsPerMeter;
+
+  console.log("EpicenterZone - Cálculos de visualización:", {
+    METERS_TO_PIXELS_X,
+    METERS_TO_PIXELS_Y,
+    avgPixelsPerMeter,
+    centerX,
+    centerY,
+    zone_radius_meters: epicenter.zone_radius,
+    scaledRadiusMeters,
+    maxRadiusX,
+    maxRadiusY,
+    maxRadiusMeters,
+    limitedRadiusMeters,
+    minRadiusMeters: 0.5,
+    finalRadiusMeters,
+    radiusPixels,
+    center_pixels: center,
+  });
+
+  console.log("EpicenterZone - Renderizando zona epicentro");
+
+  return (
+    <div
+      className="absolute inset-0 pointer-events-none"
+      style={{ zIndex: 15 }}
+    >
+      <div
+        className="absolute rounded-full border-4 border-red-800/70 bg-red-900/20"
+        style={{
+          left: `${center.x}px`,
+          top: `${center.y}px`,
+          width: `${radiusPixels * 2}px`,
+          height: `${radiusPixels * 2}px`,
+          transform: "translate(-50%, -50%)",
+          boxShadow: "0 0 20px rgba(220, 38, 38, 0.5)",
+        }}
+      />
+      {epicenter.top_sensors &&
+        epicenter.top_sensors.map((sensor) => {
+          const sensorPos = metersToPixels(sensor.longitude, sensor.latitude);
+          return (
+            <div
+              key={sensor.micro_id}
+              className="absolute bg-red-600/50"
+              style={{
+                left: `${center.x}px`,
+                top: `${center.y}px`,
+                width: `${Math.sqrt(Math.pow(sensorPos.x - center.x, 2) + Math.pow(sensorPos.y - center.y, 2))}px`,
+                height: "2px",
+                transform: `translate(0, -50%) rotate(${Math.atan2(sensorPos.y - center.y, sensorPos.x - center.x)}rad)`,
+                transformOrigin: "0 50%",
+              }}
+            />
+          );
+        })}
+    </div>
+  );
+};
+
 const FloorPlanMap = ({
   sensorData,
   idwData,
+  epicenter = null,
   showHeatmap: initialShowHeatmap = true,
+  showEpicenter: initialShowEpicenter = true,
   showGrid: initialShowGrid = true,
   colorScheme: externalColorScheme = "redyellowgreen",
   opacity: externalOpacity = 0.7,
@@ -914,6 +964,7 @@ const FloorPlanMap = ({
 }) => {
   const [showGrid, setShowGrid] = useState(initialShowGrid);
   const [showHeatmap, setShowHeatmap] = useState(initialShowHeatmap);
+  const [showEpicenter, setShowEpicenter] = useState(initialShowEpicenter);
   const [colorScheme, setColorScheme] = useState(externalColorScheme);
   const [opacity, setOpacity] = useState(externalOpacity);
   const [idwPower, setIdwPower] = useState(externalIdwPower);
@@ -952,6 +1003,14 @@ const FloorPlanMap = ({
   useEffect(() => {
     setShowGrid(initialShowGrid);
   }, [initialShowGrid]);
+
+  useEffect(() => {
+    setShowHeatmap(initialShowHeatmap);
+  }, [initialShowHeatmap]);
+
+  useEffect(() => {
+    setShowEpicenter(initialShowEpicenter);
+  }, [initialShowEpicenter]);
 
   // No se calcula epicentro
 
@@ -1108,6 +1167,13 @@ const FloorPlanMap = ({
                 colorScheme={colorScheme}
                 opacity={opacity}
                 idwPower={idwPower}
+              />
+
+              {/* Zona Epicentro */}
+              <EpicenterZone
+                epicenter={epicenter}
+                showEpicenter={showEpicenter}
+                metersToPixels={metersToPixels}
               />
 
               {/* Cuadrícula superpuesta */}

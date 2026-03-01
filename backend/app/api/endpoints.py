@@ -145,7 +145,6 @@ async def reload_config():
     """Recargar configuración de sensores desde disco"""
     try:
         # Forzar recarga del cache
-        import time
 
         from app.utils.config_loader import _config_cache, _config_last_loaded
 
