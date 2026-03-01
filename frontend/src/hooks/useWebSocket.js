@@ -124,6 +124,11 @@ export const useWebSocket = () => {
             epicenter_prev: epicenter,
             epicenter_new: state.epicenter || null,
             setting_to_null: !state.epicenter,
+            timestamp_received: state.timestamp,
+            timestamp_type: typeof state.timestamp,
+            timestamp_sample: state.timestamp
+              ? state.timestamp.substring(0, 30)
+              : "null",
           });
 
           setSensorData(state.sensors || []);
@@ -132,7 +137,17 @@ export const useWebSocket = () => {
           setEpicenter(state.epicenter || null);
 
           setSensorCount(state.sensor_count || 0);
-          setLastUpdate(state.timestamp || new Date().toISOString());
+          const newTimestamp = state.timestamp || new Date().toISOString();
+          console.log("📅 TIMESTAMP DEBUG:", {
+            raw_timestamp: newTimestamp,
+            parsed_date: new Date(newTimestamp),
+            local_time: new Date(newTimestamp).toLocaleTimeString("es-CO", {
+              timeZone: "America/Bogota",
+              hour12: false,
+            }),
+            utc_time: new Date(newTimestamp).toUTCString(),
+          });
+          setLastUpdate(newTimestamp);
 
           // Log después de actualizar (aunque setEpicenter es asíncrono)
           console.log(

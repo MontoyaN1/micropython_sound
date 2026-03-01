@@ -1,9 +1,12 @@
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
 from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, Field
+
 
 class SensorInfo(BaseModel):
     """Información de un sensor"""
+
     micro_id: str
     sample: int
     latitude: float
@@ -11,8 +14,10 @@ class SensorInfo(BaseModel):
     location_name: str
     micro_name: Optional[str] = None
 
+
 class SensorValue(BaseModel):
     """Valor de sensor con timestamp"""
+
     sensor_key: str
     micro_id: str
     sample: int
@@ -22,15 +27,25 @@ class SensorValue(BaseModel):
     location_name: str
     last_update: str
 
+
 class HistoricalQuery(BaseModel):
     """Parámetros para consulta histórica"""
+
     start_time: datetime = Field(..., description="Tiempo de inicio (ISO 8601)")
-    end_time: Optional[datetime] = Field(None, description="Tiempo de fin (ISO 8601), default ahora")
-    micro_ids: Optional[List[str]] = Field(None, description="Lista de micro IDs a filtrar")
-    aggregation_window: str = Field("1m", description="Ventana de agregación (1m, 5m, 1h, etc.)")
+    end_time: Optional[datetime] = Field(
+        None, description="Tiempo de fin (ISO 8601), default ahora"
+    )
+    micro_ids: Optional[List[str]] = Field(
+        None, description="Lista de micro IDs a filtrar"
+    )
+    aggregation_window: str = Field(
+        "1m", description="Ventana de agregación (1m, 5m, 1h, etc.)"
+    )
+
 
 class HistoricalData(BaseModel):
     """Dato histórico"""
+
     time: str
     micro_id: str
     sensor_id: str
@@ -41,8 +56,10 @@ class HistoricalData(BaseModel):
     latitude: float
     longitude: float
 
+
 class IDWData(BaseModel):
     """Datos de interpolación IDW"""
+
     xi: List[List[float]]
     yi: List[List[float]]
     zi: List[List[float]]
@@ -52,8 +69,10 @@ class IDWData(BaseModel):
     y_max: float
     calculated_at: str
 
+
 class EpicenterData(BaseModel):
     """Datos de epicentro"""
+
     latitude: float
     longitude: float
     max_sensor_latitude: float
@@ -62,17 +81,28 @@ class EpicenterData(BaseModel):
     sensor_count: int
     calculated_at: str
     fallback: Optional[bool] = None
+    # Nuevos campos para zona epicentral
+    top_sensors: Optional[List[Dict[str, Any]]] = None
+    zone_type: Optional[str] = None  # "circle" o "polygon"
+    zone_radius: Optional[float] = None  # metros
+    zone_center_latitude: Optional[float] = None
+    zone_center_longitude: Optional[float] = None
+    zone_vertices: Optional[List[List[float]]] = None  # [[lat, lon], ...]
+
 
 class CurrentState(BaseModel):
     """Estado actual del sistema"""
+
     sensors: List[SensorValue]
     idw: Optional[IDWData] = None
     epicenter: Optional[EpicenterData] = None
     timestamp: str
     sensor_count: int
 
+
 class StatisticsResponse(BaseModel):
     """Estadísticas de un sensor"""
+
     micro_id: str
     sample: int
     count: int
@@ -82,8 +112,10 @@ class StatisticsResponse(BaseModel):
     std: float
     data_points: List[HistoricalData]
 
+
 class HealthResponse(BaseModel):
     """Respuesta de salud del sistema"""
+
     status: str
     timestamp: str
     mqtt_connected: bool

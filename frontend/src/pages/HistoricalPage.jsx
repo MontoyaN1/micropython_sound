@@ -197,18 +197,7 @@ const HistoricalPage = () => {
       "7d": "últimos 7 días",
       "30d": "últimos 30 días",
     };
-    return labels[filters.timeRange] || filters.timeRange;
-  };
-
-  const getAggregationLabel = () => {
-    const labels = {
-      "30s": "30 segundos",
-      "1m": "1 minuto",
-      "5m": "5 minutos",
-      "15m": "15 minutos",
-      "1h": "1 hora",
-    };
-    return labels[filters.aggregation] || filters.aggregation;
+    return labels[timeRange] || timeRange;
   };
 
   return (
@@ -460,7 +449,17 @@ const HistoricalPage = () => {
           <h3 className="font-semibold text-lg">Datos Históricos</h3>
           <div className="flex items-center space-x-2 text-sm text-primary-600">
             <Clock className="h-4 w-4" />
-            <span>Actualizado: {new Date().toLocaleTimeString("es-ES")}</span>
+            <span>
+              Actualizado:{" "}
+              {(() => {
+                const date = new Date();
+                date.setHours(date.getHours() - 5);
+                return date.toLocaleTimeString("es-CO", {
+                  timeZone: "America/Bogota",
+                  hour12: false,
+                });
+              })()}
+            </span>
           </div>
         </div>
 

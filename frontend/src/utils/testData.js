@@ -3,7 +3,7 @@
 // longitude: X position (0-5m, derecha=0, izquierda=5)
 // latitude: Y position (0-14m, abajo=0, arriba=14)
 // GENERADO AUTOMÁTICAMENTE desde location/sensores.yaml
-// Última sincronización: 2026-02-13T13:59:01.006561
+// Última sincronización: ${new Date().toISOString()}
 export const testSensorData = [
   {
     sensor_key: "E1",
@@ -13,7 +13,7 @@ export const testSensorData = [
     latitude: 3.0,
     longitude: 1.5,
     location_name: "Exterior 1",
-    last_update: "2026-02-13T13:59:01.006249",
+    last_update: new Date().toISOString(),
   },
   {
     sensor_key: "E2",
@@ -23,7 +23,7 @@ export const testSensorData = [
     latitude: 2.0,
     longitude: 3.5,
     location_name: "Exterior 2",
-    last_update: "2026-02-13T13:59:01.006264",
+    last_update: new Date().toISOString(),
   },
   {
     sensor_key: "E3",
@@ -33,7 +33,7 @@ export const testSensorData = [
     latitude: 7.0,
     longitude: 1.5,
     location_name: "Sala - Entrada",
-    last_update: "2026-02-13T13:59:01.006269",
+    last_update: new Date().toISOString(),
   },
   {
     sensor_key: "E4",
@@ -43,7 +43,7 @@ export const testSensorData = [
     latitude: 11.0,
     longitude: 1.5,
     location_name: "Sala - lavadero",
-    last_update: "2026-02-13T13:59:01.006273",
+    last_update: new Date().toISOString(),
   },
   {
     sensor_key: "E5",
@@ -53,7 +53,7 @@ export const testSensorData = [
     latitude: 11.0,
     longitude: 3.5,
     location_name: "Cocina",
-    last_update: "2026-02-13T13:59:01.006276",
+    last_update: new Date().toISOString(),
   },
   {
     sensor_key: "E255",
@@ -63,7 +63,7 @@ export const testSensorData = [
     latitude: 5.0,
     longitude: 3.5,
     location_name: "Oficina",
-    last_update: "2026-02-13T13:59:01.006280",
+    last_update: new Date().toISOString(),
   },
 ];
 
@@ -106,9 +106,45 @@ export const testIdwData = {
   calculated_at: new Date().toISOString(),
 };
 
-// Epicentro de prueba
+// Epicentro extendido de prueba con zona y top sensores
 export const testEpicenter = {
   latitude: 6.5,
   longitude: 2.5,
-  calculated_at: "2026-02-13T13:59:01.006556",
+  max_sensor_latitude: 5.0, // E255 (mayor valor)
+  max_sensor_longitude: 3.5,
+  max_value: 60.5,
+  sensor_count: 6,
+  calculated_at: new Date().toISOString(),
+  fallback: false,
+  top_sensors: [
+    {
+      micro_id: "E255",
+      latitude: 5.0,
+      longitude: 3.5,
+      value: 60.5,
+      rank: 1,
+      location_name: "Oficina",
+    },
+    {
+      micro_id: "E4",
+      latitude: 11.0,
+      longitude: 1.5,
+      value: 55.1,
+      rank: 2,
+      location_name: "Sala - lavadero",
+    },
+    {
+      micro_id: "E2",
+      latitude: 2.0,
+      longitude: 3.5,
+      value: 52.3,
+      rank: 3,
+      location_name: "Exterior 2",
+    },
+  ],
+  zone_type: "circle",
+  zone_radius: 5.675, // distancia máxima + 0.5m margen
+  zone_center_latitude: 6.0, // promedio latitudes top sensores
+  zone_center_longitude: 2.833, // promedio longitudes top sensores
+  zone_vertices: null,
 };
