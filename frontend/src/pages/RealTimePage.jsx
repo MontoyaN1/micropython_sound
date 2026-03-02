@@ -22,7 +22,7 @@ const RealTimePage = () => {
   const epicenter = connected ? wsEpicenter : testEpicenter;
 
   const [showHeatmap, setShowHeatmap] = useState(true);
-  const [showEpicenter, setShowEpicenter] = useState(false);
+  const [showEpicenter, setShowEpicenter] = useState(true);
   const [showGrid, setShowGrid] = useState(true);
   const [colorScheme, setColorScheme] = useState("redyellowgreen");
   const [opacity, setOpacity] = useState(0.6);
@@ -234,71 +234,81 @@ const RealTimePage = () => {
       )}
 
       {/* Encabezado y estadísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <div className="card">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center space-x-2">
-              <Activity className="h-5 w-5 text-accent-500" />
-              <h3 className="font-semibold">Nivel Promedio</h3>
+          <div className="flex items-center justify-between mb-2 sm:mb-3">
+            <div className="flex items-center space-x-1 sm:space-x-2">
+              <Activity className="h-4 w-4 sm:h-5 sm:w-5 text-accent-500" />
+              <h3 className="font-semibold text-sm sm:text-base">
+                Nivel Promedio
+              </h3>
             </div>
             <span
-              className={`px-2 py-1 text-xs font-medium rounded-lg ${getNoiseLevelColor(stats.avgNoise)}`}
+              className={`px-1.5 py-0.5 sm:px-2 sm:py-1 text-xs font-medium rounded-lg ${getNoiseLevelColor(stats.avgNoise)}`}
             >
               {getNoiseLevelLabel(stats.avgNoise)}
             </span>
           </div>
-          <div className="text-3xl font-bold mb-1">
+          <div className="text-2xl sm:text-3xl font-bold mb-1">
             {stats.avgNoise.toFixed(1)} dB
           </div>
-          <div className="text-sm text-primary-600">
+          <div className="text-xs sm:text-sm text-primary-600">
             {sensorCount} sensores activos
           </div>
         </div>
 
         <div className="card">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center space-x-2">
-              <TrendingUp className="h-5 w-5 text-orange-500" />
-              <h3 className="font-semibold">Nivel Máximo</h3>
+          <div className="flex items-center justify-between mb-2 sm:mb-3">
+            <div className="flex items-center space-x-1 sm:space-x-2">
+              <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-orange-500" />
+              <h3 className="font-semibold text-sm sm:text-base">
+                Nivel Máximo
+              </h3>
             </div>
             <span
-              className={`px-2 py-1 text-xs font-medium rounded-lg ${getNoiseLevelColor(stats.maxNoise)}`}
+              className={`px-1.5 py-0.5 sm:px-2 sm:py-1 text-xs font-medium rounded-lg ${getNoiseLevelColor(stats.maxNoise)}`}
             >
               {getNoiseLevelLabel(stats.maxNoise)}
             </span>
           </div>
-          <div className="text-3xl font-bold mb-1">
+          <div className="text-2xl sm:text-3xl font-bold mb-1">
             {stats.maxNoise.toFixed(1)} dB
           </div>
-          <div className="text-sm text-primary-600">
+          <div className="text-xs sm:text-sm text-primary-600">
             Punto más ruidoso detectado
           </div>
         </div>
 
         <div className="card">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center space-x-2">
-              <AlertTriangle className="h-5 w-5 text-red-500" />
-              <h3 className="font-semibold">Sensores Críticos</h3>
+          <div className="flex items-center justify-between mb-2 sm:mb-3">
+            <div className="flex items-center space-x-1 sm:space-x-2">
+              <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 text-red-500" />
+              <h3 className="font-semibold text-sm sm:text-base">
+                Sensores Críticos
+              </h3>
             </div>
-            <span className="px-2 py-1 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg">
+            <span className="px-1.5 py-0.5 sm:px-2 sm:py-1 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg">
               {stats.criticalSensors} críticos
             </span>
           </div>
-          <div className="text-3xl font-bold mb-1">{stats.criticalSensors}</div>
-          <div className="text-sm text-primary-600">
+          <div className="text-2xl sm:text-3xl font-bold mb-1">
+            {stats.criticalSensors}
+          </div>
+          <div className="text-xs sm:text-sm text-primary-600">
             &gt; 85 dB (límite recomendado)
           </div>
         </div>
 
         <div className="card">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center space-x-2">
-              <Clock className="h-5 w-5 text-primary-600" />
-              <h3 className="font-semibold">Última Actualización</h3>
+          <div className="flex items-center justify-between mb-2 sm:mb-3">
+            <div className="flex items-center space-x-1 sm:space-x-2">
+              <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-primary-600" />
+              <h3 className="font-semibold text-sm sm:text-base">
+                Última Actualización
+              </h3>
             </div>
             <span
-              className={`px-2 py-1 text-xs font-medium rounded-lg ${
+              className={`px-1.5 py-0.5 sm:px-2 sm:py-1 text-xs font-medium rounded-lg ${
                 connected
                   ? "text-green-600 bg-green-50 border-green-200"
                   : "text-red-600 bg-red-50 border-red-200"
@@ -307,29 +317,31 @@ const RealTimePage = () => {
               {connected ? "En vivo" : "Desconectado"}
             </span>
           </div>
-          <div className="text-3xl font-bold mb-1">
+          <div className="text-2xl sm:text-3xl font-bold mb-1">
             {formatTime(lastUpdate)}
           </div>
-          <div className="text-sm text-primary-600">
+          <div className="text-xs sm:text-sm text-primary-600">
             Actualización cada 5 segundos
           </div>
         </div>
       </div>
 
       {/* Mapa y Controles */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Mapa - ocupa 2/3 del espacio */}
         <div className="lg:col-span-2">
           <div className="card p-0 overflow-hidden h-full">
-            <div className="p-3 border-b border-primary-200">
-              <div className="flex items-center justify-between">
+            <div className="p-2 sm:p-3 border-b border-primary-200">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-0">
                 <div className="flex items-center space-x-2">
                   <div
-                    className={`w-3 h-3 rounded-full ${connected ? "bg-green-500 animate-pulse" : "bg-red-500"}`}
+                    className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full ${connected ? "bg-green-500 animate-pulse" : "bg-red-500"}`}
                   ></div>
-                  <h2 className="text-lg font-bold">Mapa en Tiempo Real</h2>
+                  <h2 className="text-base sm:text-lg font-bold">
+                    Mapa en Tiempo Real
+                  </h2>
                 </div>
-                <div className="flex items-center space-x-3 text-xs">
+                <div className="flex items-center space-x-2 sm:space-x-3 text-xs">
                   <span className="text-primary-600">
                     {sensorData.length} sensores • 5m × 14m
                   </span>
@@ -337,7 +349,7 @@ const RealTimePage = () => {
               </div>
             </div>
 
-            <div className="h-[500px]">
+            <div className="h-[50vh] min-h-[300px] sm:h-[70vh] md:h-[500px]">
               {connected ? (
                 <FloorPlanMap
                   sensorData={sensorData}
@@ -371,19 +383,19 @@ const RealTimePage = () => {
         {/* Controles de Visualización - ocupa 1/3 del espacio */}
         <div className="lg:col-span-1">
           <div className="card h-full">
-            <h3 className="font-semibold text-lg mb-4">
+            <h3 className="font-semibold text-base sm:text-lg mb-3 sm:mb-4">
               Controles de Visualización
             </h3>
-            <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
+            <div className="space-y-3 sm:space-y-4 max-h-[50vh] min-h-[200px] sm:max-h-[400px] md:max-h-[500px] overflow-y-auto pr-1 sm:pr-2">
               {/* Controles principales */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between p-3 bg-primary-50 rounded-lg">
-                  <label className="flex items-center space-x-2 cursor-pointer">
+              <div className="space-y-2 sm:space-y-3">
+                <div className="flex items-center justify-between p-2 sm:p-3 bg-primary-50 rounded-lg">
+                  <label className="flex items-center space-x-1 sm:space-x-2 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={showHeatmap}
                       onChange={(e) => setShowHeatmap(e.target.checked)}
-                      className="rounded text-accent-500"
+                      className="rounded text-accent-500 w-4 h-4 sm:w-5 sm:h-5"
                     />
                     <span className="text-sm font-medium">Mapa de Calor</span>
                     <span className="text-xs text-primary-500 ml-1">
@@ -391,19 +403,19 @@ const RealTimePage = () => {
                     </span>
                   </label>
                   <div className="flex items-center space-x-1">
-                    <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                    <div className="w-3 h-3 rounded-full bg-cyan-500"></div>
-                    <div className="w-3 h-3 rounded-full bg-lime-500"></div>
+                    <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-blue-500"></div>
+                    <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-cyan-500"></div>
+                    <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-lime-500"></div>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between p-3 bg-primary-50 rounded-lg">
-                  <label className="flex items-center space-x-2 cursor-pointer">
+                <div className="flex items-center justify-between p-2 sm:p-3 bg-primary-50 rounded-lg">
+                  <label className="flex items-center space-x-1 sm:space-x-2 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={showEpicenter}
                       onChange={(e) => setShowEpicenter(e.target.checked)}
-                      className="rounded text-accent-500"
+                      className="rounded text-accent-500 w-4 h-4 sm:w-5 sm:h-5"
                     />
                     <span className="text-sm font-medium">Zona Epicentro</span>
                     <span className="text-xs text-primary-500 ml-1">
@@ -411,22 +423,22 @@ const RealTimePage = () => {
                     </span>
                   </label>
                   <div className="flex items-center space-x-1">
-                    <div className="w-3 h-3 rounded-full bg-red-800"></div>
-                    <div className="w-3 h-3 rounded-full bg-red-600"></div>
+                    <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-red-800"></div>
+                    <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-red-600"></div>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between p-3 bg-primary-50 rounded-lg">
-                  <label className="flex items-center space-x-2 cursor-pointer">
+                <div className="flex items-center justify-between p-2 sm:p-3 bg-primary-50 rounded-lg">
+                  <label className="flex items-center space-x-1 sm:space-x-2 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={showGrid}
                       onChange={(e) => setShowGrid(e.target.checked)}
-                      className="rounded text-accent-500"
+                      className="rounded text-accent-500 w-4 h-4 sm:w-5 sm:h-5"
                     />
                     <span className="text-sm font-medium">Cuadrícula</span>
                   </label>
-                  <div className="w-4 h-4 text-primary-600">
+                  <div className="w-3 h-3 sm:w-4 sm:h-4 text-primary-600">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
                       viewBox="0 0 24 24"
@@ -446,8 +458,8 @@ const RealTimePage = () => {
               </div>
 
               {/* Información del plano */}
-              <div className="p-3 bg-primary-50 rounded-lg">
-                <div className="text-sm font-medium mb-2">
+              <div className="p-2 sm:p-3 bg-primary-50 rounded-lg">
+                <div className="text-sm font-medium mb-1 sm:mb-2">
                   Información del Plano
                 </div>
                 <div className="space-y-1 text-xs text-primary-600">
@@ -471,25 +483,25 @@ const RealTimePage = () => {
               </div>
 
               {/* Leyenda de colores para sensores */}
-              <div className="p-3 bg-primary-50 rounded-lg">
-                <div className="text-sm font-medium mb-2">
+              <div className="p-2 sm:p-3 bg-primary-50 rounded-lg">
+                <div className="text-sm font-medium mb-1 sm:mb-2">
                   Leyenda de Sensores
                 </div>
                 <div className="space-y-1 text-xs">
-                  <div className="flex items-center space-x-2">
-                    <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                  <div className="flex items-center space-x-1 sm:space-x-2">
+                    <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-green-500"></div>
                     <span>&lt; 50 dB (Bajo)</span>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                  <div className="flex items-center space-x-1 sm:space-x-2">
+                    <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-yellow-500"></div>
                     <span>50-70 dB (Moderado)</span>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+                  <div className="flex items-center space-x-1 sm:space-x-2">
+                    <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-orange-500"></div>
                     <span>70-85 dB (Alto)</span>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                  <div className="flex items-center space-x-1 sm:space-x-2">
+                    <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-red-500"></div>
                     <span>&gt; 85 dB (Crítico)</span>
                   </div>
                 </div>
@@ -586,24 +598,26 @@ const RealTimePage = () => {
 
       {/* Lista de sensores */}
       <div className="card">
-        <h3 className="font-semibold text-lg mb-4">Sensores Activos</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full">
+        <h3 className="font-semibold text-base sm:text-lg mb-3 sm:mb-4">
+          Sensores Activos
+        </h3>
+        <div className="overflow-x-auto -mx-2 sm:mx-0">
+          <table className="w-full min-w-[640px] sm:min-w-0">
             <thead>
               <tr className="border-b border-primary-200">
-                <th className="text-left py-3 px-4 text-sm font-medium text-primary-600">
+                <th className="text-left py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-medium text-primary-600">
                   Micro ID
                 </th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-primary-600">
+                <th className="text-left py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-medium text-primary-600">
                   Ubicación
                 </th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-primary-600">
+                <th className="text-left py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-medium text-primary-600">
                   Nivel de Ruido
                 </th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-primary-600">
+                <th className="text-left py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-medium text-primary-600">
                   Estado
                 </th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-primary-600">
+                <th className="text-left py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-medium text-primary-600">
                   Última Actualización
                 </th>
               </tr>
@@ -614,16 +628,20 @@ const RealTimePage = () => {
                   key={sensor.micro_id}
                   className="border-b border-primary-100 hover:bg-primary-50"
                 >
-                  <td className="py-3 px-4">
-                    <div className="font-medium">{sensor.micro_id}</div>
+                  <td className="py-2 px-2 sm:py-3 sm:px-4">
+                    <div className="font-medium text-xs sm:text-sm">
+                      {sensor.micro_id}
+                    </div>
                   </td>
-                  <td className="py-3 px-4">
-                    <div className="text-sm">{sensor.location_name}</div>
+                  <td className="py-2 px-2 sm:py-3 sm:px-4">
+                    <div className="text-xs sm:text-sm">
+                      {sensor.location_name}
+                    </div>
                   </td>
-                  <td className="py-3 px-4">
-                    <div className="flex items-center space-x-2">
+                  <td className="py-2 px-2 sm:py-3 sm:px-4">
+                    <div className="flex items-center space-x-1 sm:space-x-2">
                       <div
-                        className={`w-3 h-3 rounded-full ${
+                        className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full ${
                           sensor.value >= 85
                             ? "bg-red-500"
                             : sensor.value >= 70
@@ -634,7 +652,7 @@ const RealTimePage = () => {
                         }`}
                       ></div>
                       <span
-                        className={`font-bold ${
+                        className={`font-bold text-xs sm:text-sm ${
                           sensor.value >= 85
                             ? "text-red-600"
                             : sensor.value >= 70
@@ -648,9 +666,9 @@ const RealTimePage = () => {
                       </span>
                     </div>
                   </td>
-                  <td className="py-3 px-4">
+                  <td className="py-2 px-2 sm:py-3 sm:px-4">
                     <span
-                      className={`px-2 py-1 text-xs font-medium rounded-lg ${
+                      className={`px-1.5 py-0.5 sm:px-2 sm:py-1 text-xs font-medium rounded-lg ${
                         sensor.value >= 85
                           ? "text-red-600 bg-red-50 border border-red-200"
                           : sensor.value >= 70
@@ -663,8 +681,8 @@ const RealTimePage = () => {
                       {getNoiseLevelLabel(sensor.value)}
                     </span>
                   </td>
-                  <td className="py-3 px-4">
-                    <div className="text-sm text-primary-600">
+                  <td className="py-2 px-2 sm:py-3 sm:px-4">
+                    <div className="text-xs sm:text-sm text-primary-600">
                       {formatTime(sensor.last_update)}
                     </div>
                   </td>

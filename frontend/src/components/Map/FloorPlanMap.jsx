@@ -153,19 +153,19 @@ const SensorMarker = ({
   return (
     <div
       ref={containerRef}
-      className="absolute cursor-pointer group isolate"
+      className="absolute cursor-pointer group"
       style={{
         left: `${x}px`,
         top: `${y}px`,
-        transform: "translate(-50%, -50%)", // Centrar en la posición
-        zIndex: 50,
+        transform: "translate(-50%, -50%)",
+        zIndex: showPopup ? 1000 : 10,
       }}
       onMouseEnter={() => setShowPopup(true)}
       onMouseLeave={() => setShowPopup(false)}
     >
       {/* Punto del sensor */}
       <div
-        className={`relative w-10 h-10 rounded-full bg-white border-2 ${colorClasses.split(" ")[1]} flex items-center justify-center shadow-lg`}
+        className={`relative w-10 h-10 rounded-full bg-white border-2 ${colorClasses.split(" ")[1]} flex items-center justify-center shadow-lg z-10`}
       >
         {/* ID del sensor en el centro */}
         <div className={`text-xs font-bold ${colorClasses.split(" ")[2]}`}>
@@ -180,34 +180,10 @@ const SensorMarker = ({
         </div>
       </div>
 
-      {/* Tooltip al pasar el mouse - posición dinámica */}
-      <div
-        className={`absolute left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-[100] isolate ${
-          tooltipPosition === "top" ? "bottom-full mb-2" : "top-full mt-2"
-        }`}
-      >
-        <div className="bg-black/90 text-white text-xs rounded-lg py-2 px-3 shadow-xl whitespace-nowrap">
-          <div className="font-bold">
-            {micro_id}: {value.toFixed(1)} dB
-          </div>
-          <div className="text-gray-300">{location_name}</div>
-          <div className="text-gray-400">
-            {metersX.toFixed(1)}m, {metersY.toFixed(1)}m
-          </div>
-        </div>
-        <div
-          className={`absolute left-1/2 transform -translate-x-1/2 w-0 h-0 ${
-            tooltipPosition === "top"
-              ? "top-full border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-black/90"
-              : "bottom-full border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-black/90"
-          }`}
-        ></div>
-      </div>
-
-      {/* Popup detallado (click/touch) - posición dinámica */}
+      {/* Popup detallado (hover) - posición dinámica */}
       {showPopup && (
         <div
-          className={`absolute left-1/2 transform -translate-x-1/2 w-64 bg-white rounded-lg shadow-xl p-4 z-50 border border-gray-200 ${
+          className={`absolute left-1/2 transform -translate-x-1/2 w-64 bg-white rounded-lg shadow-xl p-4 z-[100] border border-gray-200 ${
             tooltipPosition === "top" ? "bottom-full mb-12" : "top-full mt-12"
           }`}
         >
@@ -918,6 +894,7 @@ const EpicenterZone = ({ epicenter, showEpicenter, metersToPixels }) => {
       className="absolute inset-0 pointer-events-none"
       style={{ zIndex: 15 }}
     >
+      {/* Zona epicentro principal */}
       <div
         className="absolute rounded-full border-4 border-red-800/70 bg-red-900/20"
         style={{
@@ -929,6 +906,8 @@ const EpicenterZone = ({ epicenter, showEpicenter, metersToPixels }) => {
           boxShadow: "0 0 20px rgba(220, 38, 38, 0.5)",
         }}
       />
+
+      {/* Líneas a sensores top */}
       {epicenter.top_sensors &&
         epicenter.top_sensors.map((sensor) => {
           const sensorPos = metersToPixels(sensor.longitude, sensor.latitude);
@@ -969,7 +948,16 @@ const FloorPlanMap = ({
   const [opacity, setOpacity] = useState(externalOpacity);
   const [idwPower, setIdwPower] = useState(externalIdwPower);
   const [heatmapStats, setHeatmapStats] = useState({ min: null, max: null });
+  const [imageDimensions, setImageDimensions] = useState({
+    width: PLAN_IMAGE_WIDTH,
+    height: PLAN_IMAGE_HEIGHT,
+  });
+  const [displayDimensions, setDisplayDimensions] = useState({
+    width: 0,
+    height: 0,
+  });
   const containerRef = useRef(null);
+  const imageRef = useRef(null);
 
   // Generar estilo de gradiente para la leyenda del mapa de calor
   const gradientStyle = useMemo(() => {
@@ -1012,6 +1000,39 @@ const FloorPlanMap = ({
     setShowEpicenter(initialShowEpicenter);
   }, [initialShowEpicenter]);
 
+  // Medir dimensiones de la imagen cuando se carga y cuando cambia el tamaño de ventana
+  useEffect(() => {
+    const updateDisplayDimensions = () => {
+      if (imageRef.current) {
+        const rect = imageRef.current.getBoundingClientRect();
+        setDisplayDimensions({
+          width: rect.width,
+          height: rect.height,
+        });
+      }
+    };
+
+    // Actualizar cuando la imagen se carga
+    const img = imageRef.current;
+    if (img) {
+      if (img.complete) {
+        updateDisplayDimensions();
+      } else {
+        img.addEventListener("load", updateDisplayDimensions);
+      }
+    }
+
+    // Actualizar en redimensionamiento de ventana
+    window.addEventListener("resize", updateDisplayDimensions);
+
+    return () => {
+      if (img) {
+        img.removeEventListener("load", updateDisplayDimensions);
+      }
+      window.removeEventListener("resize", updateDisplayDimensions);
+    };
+  }, []);
+
   // No se calcula epicentro
 
   // Convertir coordenadas en metros a píxeles
@@ -1035,12 +1056,18 @@ const FloorPlanMap = ({
       );
     }
 
-    // Convertir metros a píxeles
-    // X: 0-5m (derecha=0, izquierda=5) -> píxeles: derecha=202, izquierda=0
-    const xPx = PLAN_IMAGE_WIDTH - adjustedXMeters * METERS_TO_PIXELS_X;
+    // Usar dimensiones actuales de la imagen para escalado
+    const displayWidth = displayDimensions.width || PLAN_IMAGE_WIDTH;
+    const displayHeight = displayDimensions.height || PLAN_IMAGE_HEIGHT;
+    const scaleX = displayWidth / PLAN_IMAGE_WIDTH;
+    const scaleY = displayHeight / PLAN_IMAGE_HEIGHT;
 
-    // Y: 0-14m (abajo=0, arriba=14) -> píxeles: abajo=562, arriba=0
-    const yPx = PLAN_IMAGE_HEIGHT - adjustedYMeters * METERS_TO_PIXELS_Y;
+    // Convertir metros a píxeles
+    // X: 0-5m (derecha=0, izquierda=5) -> píxeles: derecha=displayWidth, izquierda=0
+    const xPx = displayWidth - adjustedXMeters * (METERS_TO_PIXELS_X * scaleX);
+
+    // Y: 0-14m (abajo=0, arriba=14) -> píxeles: abajo=displayHeight, arriba=0
+    const yPx = displayHeight - adjustedYMeters * (METERS_TO_PIXELS_Y * scaleY);
 
     return { x: xPx, y: yPx };
   };
@@ -1143,16 +1170,28 @@ const FloorPlanMap = ({
           <div
             className="relative"
             style={{
-              width: `${PLAN_IMAGE_WIDTH}px`,
-              height: `${PLAN_IMAGE_HEIGHT}px`,
+              width: "100%",
+              height: "auto",
+              maxWidth: `${PLAN_IMAGE_WIDTH}px`,
+              maxHeight: `${PLAN_IMAGE_HEIGHT}px`,
             }}
           >
             <img
+              ref={imageRef}
               src="/plano.png"
               alt="Plano interior"
-              className="w-full h-full"
-              onLoad={() => {
-                /* console.log("Plano cargado correctamente") */
+              className="w-full h-auto"
+              onLoad={(e) => {
+                const img = e.target;
+                setImageDimensions({
+                  width: img.naturalWidth,
+                  height: img.naturalHeight,
+                });
+                const rect = img.getBoundingClientRect();
+                setDisplayDimensions({
+                  width: rect.width,
+                  height: rect.height,
+                });
               }}
               onError={() => console.error("Error cargando plano.png")}
             />
@@ -1210,8 +1249,8 @@ const FloorPlanMap = ({
                 <div
                   className="absolute w-2 h-2 bg-blue-500 rounded-full"
                   style={{
-                    left: `${PLAN_IMAGE_WIDTH}px`,
-                    top: `${PLAN_IMAGE_HEIGHT}px`,
+                    left: `${displayDimensions.width || PLAN_IMAGE_WIDTH}px`,
+                    top: `${displayDimensions.height || PLAN_IMAGE_HEIGHT}px`,
                     transform: "translate(-50%, -50%)",
                   }}
                   title="Esquina inferior derecha (0,0)"
@@ -1220,7 +1259,7 @@ const FloorPlanMap = ({
                   className="absolute w-2 h-2 bg-blue-500 rounded-full"
                   style={{
                     left: "0px",
-                    top: `${PLAN_IMAGE_HEIGHT}px`,
+                    top: `${displayDimensions.height || PLAN_IMAGE_HEIGHT}px`,
                     transform: "translate(-50%, -50%)",
                   }}
                   title="Esquina inferior izquierda (5,0)"
@@ -1228,7 +1267,7 @@ const FloorPlanMap = ({
                 <div
                   className="absolute w-2 h-2 bg-blue-500 rounded-full"
                   style={{
-                    left: `${PLAN_IMAGE_WIDTH}px`,
+                    left: `${displayDimensions.width || PLAN_IMAGE_WIDTH}px`,
                     top: "0px",
                     transform: "translate(-50%, -50%)",
                   }}
