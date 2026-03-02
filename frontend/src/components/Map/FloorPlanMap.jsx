@@ -153,19 +153,19 @@ const SensorMarker = ({
   return (
     <div
       ref={containerRef}
-      className="absolute cursor-pointer group isolate"
+      className="absolute cursor-pointer group"
       style={{
         left: `${x}px`,
         top: `${y}px`,
-        transform: "translate(-50%, -50%)", // Centrar en la posición
-        zIndex: 50,
+        transform: "translate(-50%, -50%)",
+        zIndex: showPopup ? 1000 : 10,
       }}
       onMouseEnter={() => setShowPopup(true)}
       onMouseLeave={() => setShowPopup(false)}
     >
       {/* Punto del sensor */}
       <div
-        className={`relative w-10 h-10 rounded-full bg-white border-2 ${colorClasses.split(" ")[1]} flex items-center justify-center shadow-lg`}
+        className={`relative w-10 h-10 rounded-full bg-white border-2 ${colorClasses.split(" ")[1]} flex items-center justify-center shadow-lg z-10`}
       >
         {/* ID del sensor en el centro */}
         <div className={`text-xs font-bold ${colorClasses.split(" ")[2]}`}>
@@ -180,34 +180,10 @@ const SensorMarker = ({
         </div>
       </div>
 
-      {/* Tooltip al pasar el mouse - posición dinámica */}
-      <div
-        className={`absolute left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-[100] isolate ${
-          tooltipPosition === "top" ? "bottom-full mb-2" : "top-full mt-2"
-        }`}
-      >
-        <div className="bg-black/90 text-white text-xs rounded-lg py-2 px-3 shadow-xl whitespace-nowrap">
-          <div className="font-bold">
-            {micro_id}: {value.toFixed(1)} dB
-          </div>
-          <div className="text-gray-300">{location_name}</div>
-          <div className="text-gray-400">
-            {metersX.toFixed(1)}m, {metersY.toFixed(1)}m
-          </div>
-        </div>
-        <div
-          className={`absolute left-1/2 transform -translate-x-1/2 w-0 h-0 ${
-            tooltipPosition === "top"
-              ? "top-full border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-black/90"
-              : "bottom-full border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-black/90"
-          }`}
-        ></div>
-      </div>
-
-      {/* Popup detallado (click/touch) - posición dinámica */}
+      {/* Popup detallado (hover) - posición dinámica */}
       {showPopup && (
         <div
-          className={`absolute left-1/2 transform -translate-x-1/2 w-64 bg-white rounded-lg shadow-xl p-4 z-50 border border-gray-200 ${
+          className={`absolute left-1/2 transform -translate-x-1/2 w-64 bg-white rounded-lg shadow-xl p-4 z-[100] border border-gray-200 ${
             tooltipPosition === "top" ? "bottom-full mb-12" : "top-full mt-12"
           }`}
         >
@@ -918,6 +894,7 @@ const EpicenterZone = ({ epicenter, showEpicenter, metersToPixels }) => {
       className="absolute inset-0 pointer-events-none"
       style={{ zIndex: 15 }}
     >
+      {/* Zona epicentro principal */}
       <div
         className="absolute rounded-full border-4 border-red-800/70 bg-red-900/20"
         style={{
@@ -929,6 +906,8 @@ const EpicenterZone = ({ epicenter, showEpicenter, metersToPixels }) => {
           boxShadow: "0 0 20px rgba(220, 38, 38, 0.5)",
         }}
       />
+
+      {/* Líneas a sensores top */}
       {epicenter.top_sensors &&
         epicenter.top_sensors.map((sensor) => {
           const sensorPos = metersToPixels(sensor.longitude, sensor.latitude);
@@ -1247,6 +1226,27 @@ const FloorPlanMap = ({
             </div>
           </div>
         </div>
+
+        {/* Leyenda del mapa de calor */}
+        {showHeatmap && idwData && (
+          <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur-sm p-3 rounded-lg shadow-lg border">
+            <div className="space-y-2">
+              <div className="text-xs font-medium text-gray-700">
+                Leyenda (dB)
+              </div>
+              <div style={gradientStyle} />
+              <div className="flex justify-between text-xs text-gray-600">
+                <span>{heatmapStats.min?.toFixed(1) || "0.0"}</span>
+                <span>
+                  {heatmapStats.min && heatmapStats.max
+                    ? ((heatmapStats.min + heatmapStats.max) / 2).toFixed(1)
+                    : "0.0"}
+                </span>
+                <span>{heatmapStats.max?.toFixed(1) || "0.0"}</span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -18,6 +18,3 @@
   "lang": "es",
   "dir": "ltr"
 }
-```
-
-Ahora voy a actualizar el index.html para incluir el manifest:

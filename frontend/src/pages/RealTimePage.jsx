@@ -22,7 +22,7 @@ const RealTimePage = () => {
   const epicenter = connected ? wsEpicenter : testEpicenter;
 
   const [showHeatmap, setShowHeatmap] = useState(true);
-  const [showEpicenter, setShowEpicenter] = useState(false);
+  const [showEpicenter, setShowEpicenter] = useState(true);
   const [showGrid, setShowGrid] = useState(true);
   const [colorScheme, setColorScheme] = useState("redyellowgreen");
   const [opacity, setOpacity] = useState(0.6);
