@@ -231,10 +231,10 @@ const HistoricalPage = () => {
               <CalendarDays className="h-4 w-4 text-primary-600" />
               <span>Modo de Consulta</span>
             </label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="flex space-x-2 mb-3 sm:mb-4">
               <button
                 onClick={() => setDateMode("range")}
-                className={`px-3 py-2 text-sm rounded-lg transition-colors ${
+                className={`px-3 py-1.5 sm:px-4 sm:py-2 text-sm sm:text-base rounded-lg transition-colors ${
                   dateMode === "range"
                     ? "bg-accent-500 text-white"
                     : "bg-primary-100 text-primary-700 hover:bg-primary-200"
@@ -244,7 +244,7 @@ const HistoricalPage = () => {
               </button>
               <button
                 onClick={() => setDateMode("specific")}
-                className={`px-3 py-2 text-sm rounded-lg transition-colors ${
+                className={`px-3 py-1.5 sm:px-4 sm:py-2 text-sm sm:text-base rounded-lg transition-colors ${
                   dateMode === "specific"
                     ? "bg-accent-500 text-white"
                     : "bg-primary-100 text-primary-700 hover:bg-primary-200"
@@ -255,15 +255,15 @@ const HistoricalPage = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
             {/* Rango de tiempo (solo visible en modo range) */}
             {dateMode === "range" && (
               <div className="space-y-2">
-                <label className="flex items-center space-x-2 text-sm font-medium">
-                  <Calendar className="h-4 w-4 text-primary-600" />
+                <label className="flex items-center space-x-1 sm:space-x-2 text-sm font-medium">
+                  <Calendar className="h-3 w-3 sm:h-4 sm:w-4 text-primary-600" />
                   <span>Rango de Tiempo</span>
                 </label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 sm:gap-2">
                   {[
                     { value: "1h", label: "1 hora" },
                     { value: "5h", label: "5 horas" },
@@ -274,7 +274,7 @@ const HistoricalPage = () => {
                     <button
                       key={range.value}
                       onClick={() => setTimeRange(range.value)}
-                      className={`px-3 py-2 text-sm rounded-lg transition-colors ${
+                      className={`px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm rounded-lg transition-colors ${
                         timeRange === range.value
                           ? "bg-accent-500 text-white"
                           : "bg-primary-100 text-primary-700 hover:bg-primary-200"
@@ -290,23 +290,23 @@ const HistoricalPage = () => {
             {/* Fecha específica (solo visible en modo specific) */}
             {dateMode === "specific" && (
               <div className="space-y-2">
-                <label className="flex items-center space-x-2 text-sm font-medium">
-                  <Calendar className="h-4 w-4 text-primary-600" />
+                <label className="flex items-center space-x-1 sm:space-x-2 text-sm font-medium">
+                  <Calendar className="h-3 w-3 sm:h-4 sm:w-4 text-primary-600" />
                   <span>Seleccionar Fecha</span>
                 </label>
-                <div className="flex items-center space-x-2">
+                <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-2">
                   <input
                     type="date"
                     value={specificDate}
                     onChange={(e) => setSpecificDate(e.target.value)}
-                    className="px-3 py-2 border border-primary-300 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent"
+                    className="px-2 py-1.5 sm:px-3 sm:py-2 border border-primary-300 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent text-sm sm:text-base"
                   />
                   <button
                     onClick={() => {
                       const today = new Date();
                       setSpecificDate(today.toISOString().split("T")[0]);
                     }}
-                    className="px-3 py-2 bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200 transition-colors text-sm"
+                    className="px-2 py-1.5 sm:px-3 sm:py-2 bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200 transition-colors text-xs sm:text-sm"
                   >
                     Hoy
                   </button>
@@ -319,11 +319,11 @@ const HistoricalPage = () => {
 
             {/* Selector de sensor (siempre visible) */}
             <div className="space-y-2">
-              <label className="flex items-center space-x-2 text-sm font-medium">
-                <Filter className="h-4 w-4 text-primary-600" />
+              <label className="flex items-center space-x-1 sm:space-x-2 text-sm font-medium">
+                <Filter className="h-3 w-3 sm:h-4 sm:w-4 text-primary-600" />
                 <span>Sensor para Estadísticas</span>
               </label>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-3 sm:grid-cols-3 gap-1.5 sm:gap-2">
                 {[
                   { id: "E1", name: "E1" },
                   { id: "E2", name: "E2" },
@@ -335,7 +335,7 @@ const HistoricalPage = () => {
                   <button
                     key={micro.id}
                     onClick={() => setSelectedSensor(micro.id)}
-                    className={`px-3 py-2 text-sm rounded-lg transition-colors ${
+                    className={`px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm rounded-lg transition-colors ${
                       selectedSensor === micro.id
                         ? "bg-accent-500 text-white"
                         : "bg-primary-100 text-primary-700 hover:bg-primary-200"
@@ -351,13 +351,13 @@ const HistoricalPage = () => {
       </div>
 
       {/* Resumen */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
         <div className="card">
-          <div className="flex items-center space-x-2 mb-3">
-            <Calendar className="h-5 w-5 text-accent-500" />
-            <h3 className="font-semibold">Período</h3>
+          <div className="flex items-center space-x-1 sm:space-x-2 mb-2 sm:mb-3">
+            <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-accent-500" />
+            <h3 className="font-semibold text-sm sm:text-base">Período</h3>
           </div>
-          <div className="text-2xl font-bold mb-1">
+          <div className="text-xl sm:text-2xl font-bold mb-1">
             {dateMode === "range"
               ? timeRange === "1h"
                 ? "Última hora"
@@ -376,31 +376,37 @@ const HistoricalPage = () => {
                   timeZone: "UTC",
                 })}
           </div>
-          <div className="text-sm text-primary-600">
+          <div className="text-xs sm:text-sm text-primary-600">
             {dateMode === "range" ? "Rango predefinido" : "Fecha específica"}
           </div>
         </div>
 
         <div className="card">
-          <div className="flex items-center space-x-2 mb-3">
-            <BarChart3 className="h-5 w-5 text-accent-500" />
-            <h3 className="font-semibold">Sensor Seleccionado</h3>
+          <div className="flex items-center space-x-1 sm:space-x-2 mb-2 sm:mb-3">
+            <BarChart3 className="h-4 w-4 sm:h-5 sm:w-5 text-accent-500" />
+            <h3 className="font-semibold text-sm sm:text-base">
+              Sensor Seleccionado
+            </h3>
           </div>
-          <div className="text-2xl font-bold mb-1">{selectedSensor}</div>
-          <div className="text-sm text-primary-600">
+          <div className="text-xl sm:text-2xl font-bold mb-1">
+            {selectedSensor}
+          </div>
+          <div className="text-xs sm:text-sm text-primary-600">
             Estadísticas detalladas
           </div>
         </div>
 
         <div className="card">
-          <div className="flex items-center space-x-2 mb-3">
-            <Filter className="h-5 w-5 text-accent-500" />
-            <h3 className="font-semibold">Datos del Sensor</h3>
+          <div className="flex items-center space-x-1 sm:space-x-2 mb-2 sm:mb-3">
+            <Filter className="h-4 w-4 sm:h-5 sm:w-5 text-accent-500" />
+            <h3 className="font-semibold text-sm sm:text-base">
+              Datos del Sensor
+            </h3>
           </div>
-          <div className="text-2xl font-bold mb-1">
+          <div className="text-xl sm:text-2xl font-bold mb-1">
             {historicalData.filter((d) => d.micro_id === selectedSensor).length}
           </div>
-          <div className="text-sm text-primary-600">
+          <div className="text-xs sm:text-sm text-primary-600">
             Registros del {selectedSensor} en el período
           </div>
         </div>
@@ -408,36 +414,46 @@ const HistoricalPage = () => {
 
       {/* Estadísticas del sensor seleccionado */}
       <div className="card">
-        <h3 className="font-semibold text-lg mb-4">
+        <h3 className="font-semibold text-base sm:text-lg mb-3 sm:mb-4">
           Estadísticas del Sensor {selectedSensor}
         </h3>
         {sensorStats ? (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-primary-50 rounded-xl p-4">
-              <div className="text-sm text-primary-600 mb-1">Promedio</div>
-              <div className="text-2xl font-bold">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4">
+            <div className="bg-primary-50 rounded-xl p-3 sm:p-4">
+              <div className="text-xs sm:text-sm text-primary-600 mb-1">
+                Promedio
+              </div>
+              <div className="text-xl sm:text-2xl font-bold">
                 {sensorStats.mean.toFixed(1)} dB
               </div>
             </div>
-            <div className="bg-primary-50 rounded-xl p-4">
-              <div className="text-sm text-primary-600 mb-1">Máximo</div>
-              <div className="text-2xl font-bold">
+            <div className="bg-primary-50 rounded-xl p-3 sm:p-4">
+              <div className="text-xs sm:text-sm text-primary-600 mb-1">
+                Máximo
+              </div>
+              <div className="text-xl sm:text-2xl font-bold">
                 {sensorStats.max.toFixed(1)} dB
               </div>
             </div>
-            <div className="bg-primary-50 rounded-xl p-4">
-              <div className="text-sm text-primary-600 mb-1">Mínimo</div>
-              <div className="text-2xl font-bold">
+            <div className="bg-primary-50 rounded-xl p-3 sm:p-4">
+              <div className="text-xs sm:text-sm text-primary-600 mb-1">
+                Mínimo
+              </div>
+              <div className="text-xl sm:text-2xl font-bold">
                 {sensorStats.min.toFixed(1)} dB
               </div>
             </div>
-            <div className="bg-primary-50 rounded-xl p-4">
-              <div className="text-sm text-primary-600 mb-1">Registros</div>
-              <div className="text-2xl font-bold">{sensorStats.count}</div>
+            <div className="bg-primary-50 rounded-xl p-3 sm:p-4">
+              <div className="text-xs sm:text-sm text-primary-600 mb-1">
+                Registros
+              </div>
+              <div className="text-xl sm:text-2xl font-bold">
+                {sensorStats.count}
+              </div>
             </div>
           </div>
         ) : (
-          <div className="text-center py-8 text-primary-600">
+          <div className="text-center py-6 sm:py-8 text-primary-600">
             Cargando estadísticas...
           </div>
         )}
@@ -445,9 +461,11 @@ const HistoricalPage = () => {
 
       {/* Tabla de datos */}
       <div className="card">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-lg">Datos Históricos</h3>
-          <div className="flex items-center space-x-2 text-sm text-primary-600">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 sm:mb-4 gap-2 sm:gap-0">
+          <h3 className="font-semibold text-base sm:text-lg">
+            Datos Históricos
+          </h3>
+          <div className="flex items-center space-x-2 text-xs sm:text-sm text-primary-600">
             <Clock className="h-4 w-4" />
             <span>
               Actualizado:{" "}
@@ -475,21 +493,21 @@ const HistoricalPage = () => {
             No hay datos históricos disponibles para el período seleccionado
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div className="overflow-x-auto -mx-4 sm:mx-0">
+            <table className="w-full min-w-[640px] sm:min-w-0">
               <thead>
                 <tr className="border-b border-primary-200">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-primary-600">
+                  <th className="text-left py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-medium text-primary-600">
                     Fecha y Hora
                   </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-primary-600">
+                  <th className="text-left py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-medium text-primary-600">
                     Micro ID
                   </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-primary-600">
+                  <th className="text-left py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-medium text-primary-600">
                     Ubicación
                   </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-primary-600">
-                    Nivel de Ruido (dB)
+                  <th className="text-left py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-medium text-primary-600">
+                    Nivel (dB)
                   </th>
                 </tr>
               </thead>
@@ -503,20 +521,24 @@ const HistoricalPage = () => {
                       key={index}
                       className="border-b border-primary-100 hover:bg-primary-50"
                     >
-                      <td className="py-3 px-4">
-                        <div className="text-sm">
+                      <td className="py-2 px-2 sm:py-3 sm:px-4">
+                        <div className="text-xs sm:text-sm">
                           {new Date(row.time).toLocaleString("es-ES")}
                         </div>
                       </td>
-                      <td className="py-3 px-4">
-                        <div className="font-medium">{row.micro_id}</div>
+                      <td className="py-2 px-2 sm:py-3 sm:px-4">
+                        <div className="font-medium text-xs sm:text-sm">
+                          {row.micro_id}
+                        </div>
                       </td>
-                      <td className="py-3 px-4">
-                        <div className="text-sm">{row.location_name}</div>
+                      <td className="py-2 px-2 sm:py-3 sm:px-4">
+                        <div className="text-xs sm:text-sm">
+                          {row.location_name}
+                        </div>
                       </td>
-                      <td className="py-3 px-4">
+                      <td className="py-2 px-2 sm:py-3 sm:px-4">
                         <div
-                          className={`font-bold ${
+                          className={`font-bold text-xs sm:text-sm ${
                             row.value >= 85
                               ? "text-red-600"
                               : row.value >= 70

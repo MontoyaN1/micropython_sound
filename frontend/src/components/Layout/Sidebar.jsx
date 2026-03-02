@@ -1,14 +1,14 @@
-import { NavLink } from 'react-router-dom'
-import { Map, History } from 'lucide-react'
+import { NavLink } from "react-router-dom";
+import { Map, History } from "lucide-react";
 
 const Sidebar = () => {
   const navItems = [
-    { path: '/', icon: Map, label: 'Mapa en Tiempo Real' },
-    { path: '/historico', icon: History, label: 'Datos Históricos' },
-  ]
-  
+    { path: "/", icon: Map, label: "Mapa en Tiempo Real" },
+    { path: "/historico", icon: History, label: "Datos Históricos" },
+  ];
+
   return (
-    <aside className="w-64 border-r border-primary-200 bg-white p-4">
+    <aside className="w-full md:w-64 border-b md:border-r border-primary-200 bg-white p-3 md:p-4">
       <nav className="space-y-2">
         {navItems.map((item) => (
           <NavLink
@@ -17,8 +17,8 @@ const Sidebar = () => {
             className={({ isActive }) =>
               `flex items-center space-x-3 px-4 py-3 rounded-xl transition-colors ${
                 isActive
-                  ? 'bg-accent-500 text-white'
-                  : 'text-primary-700 hover:bg-primary-100'
+                  ? "bg-accent-500 text-white"
+                  : "text-primary-700 hover:bg-primary-100"
               }`
             }
           >
@@ -27,9 +27,11 @@ const Sidebar = () => {
           </NavLink>
         ))}
       </nav>
-      
-      <div className="mt-8 p-4 bg-primary-50 rounded-xl border border-primary-200">
-        <h3 className="font-semibold text-primary-900 mb-2">Estado del Sistema</h3>
+
+      <div className="mt-6 md:mt-8 p-3 md:p-4 bg-primary-50 rounded-xl border border-primary-200">
+        <h3 className="font-semibold text-primary-900 mb-2">
+          Estado del Sistema
+        </h3>
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
             <span className="text-primary-600">Backend</span>
@@ -49,8 +51,8 @@ const Sidebar = () => {
           </div>
         </div>
       </div>
-      
-      <div className="mt-6 p-4 bg-gradient-to-r from-accent-500 to-accent-600 rounded-xl text-white">
+
+      <div className="mt-4 md:mt-6 p-3 md:p-4 bg-gradient-to-r from-accent-500 to-accent-600 rounded-xl text-white">
         <h3 className="font-semibold mb-2">Actualización Automática</h3>
         <p className="text-sm opacity-90">
           Los datos se actualizan cada 5 segundos mediante WebSocket
@@ -63,7 +65,7 @@ const Sidebar = () => {
         </div>
       </div>
     </aside>
-  )
-}
+  );
+};
 
-export default Sidebar
+export default Sidebar;

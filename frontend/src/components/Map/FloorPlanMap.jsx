@@ -948,7 +948,16 @@ const FloorPlanMap = ({
   const [opacity, setOpacity] = useState(externalOpacity);
   const [idwPower, setIdwPower] = useState(externalIdwPower);
   const [heatmapStats, setHeatmapStats] = useState({ min: null, max: null });
+  const [imageDimensions, setImageDimensions] = useState({
+    width: PLAN_IMAGE_WIDTH,
+    height: PLAN_IMAGE_HEIGHT,
+  });
+  const [displayDimensions, setDisplayDimensions] = useState({
+    width: 0,
+    height: 0,
+  });
   const containerRef = useRef(null);
+  const imageRef = useRef(null);
 
   // Generar estilo de gradiente para la leyenda del mapa de calor
   const gradientStyle = useMemo(() => {
@@ -991,6 +1000,39 @@ const FloorPlanMap = ({
     setShowEpicenter(initialShowEpicenter);
   }, [initialShowEpicenter]);
 
+  // Medir dimensiones de la imagen cuando se carga y cuando cambia el tamaño de ventana
+  useEffect(() => {
+    const updateDisplayDimensions = () => {
+      if (imageRef.current) {
+        const rect = imageRef.current.getBoundingClientRect();
+        setDisplayDimensions({
+          width: rect.width,
+          height: rect.height,
+        });
+      }
+    };
+
+    // Actualizar cuando la imagen se carga
+    const img = imageRef.current;
+    if (img) {
+      if (img.complete) {
+        updateDisplayDimensions();
+      } else {
+        img.addEventListener("load", updateDisplayDimensions);
+      }
+    }
+
+    // Actualizar en redimensionamiento de ventana
+    window.addEventListener("resize", updateDisplayDimensions);
+
+    return () => {
+      if (img) {
+        img.removeEventListener("load", updateDisplayDimensions);
+      }
+      window.removeEventListener("resize", updateDisplayDimensions);
+    };
+  }, []);
+
   // No se calcula epicentro
 
   // Convertir coordenadas en metros a píxeles
@@ -1014,12 +1056,18 @@ const FloorPlanMap = ({
       );
     }
 
-    // Convertir metros a píxeles
-    // X: 0-5m (derecha=0, izquierda=5) -> píxeles: derecha=202, izquierda=0
-    const xPx = PLAN_IMAGE_WIDTH - adjustedXMeters * METERS_TO_PIXELS_X;
+    // Usar dimensiones actuales de la imagen para escalado
+    const displayWidth = displayDimensions.width || PLAN_IMAGE_WIDTH;
+    const displayHeight = displayDimensions.height || PLAN_IMAGE_HEIGHT;
+    const scaleX = displayWidth / PLAN_IMAGE_WIDTH;
+    const scaleY = displayHeight / PLAN_IMAGE_HEIGHT;
 
-    // Y: 0-14m (abajo=0, arriba=14) -> píxeles: abajo=562, arriba=0
-    const yPx = PLAN_IMAGE_HEIGHT - adjustedYMeters * METERS_TO_PIXELS_Y;
+    // Convertir metros a píxeles
+    // X: 0-5m (derecha=0, izquierda=5) -> píxeles: derecha=displayWidth, izquierda=0
+    const xPx = displayWidth - adjustedXMeters * (METERS_TO_PIXELS_X * scaleX);
+
+    // Y: 0-14m (abajo=0, arriba=14) -> píxeles: abajo=displayHeight, arriba=0
+    const yPx = displayHeight - adjustedYMeters * (METERS_TO_PIXELS_Y * scaleY);
 
     return { x: xPx, y: yPx };
   };
@@ -1122,16 +1170,28 @@ const FloorPlanMap = ({
           <div
             className="relative"
             style={{
-              width: `${PLAN_IMAGE_WIDTH}px`,
-              height: `${PLAN_IMAGE_HEIGHT}px`,
+              width: "100%",
+              height: "auto",
+              maxWidth: `${PLAN_IMAGE_WIDTH}px`,
+              maxHeight: `${PLAN_IMAGE_HEIGHT}px`,
             }}
           >
             <img
+              ref={imageRef}
               src="/plano.png"
               alt="Plano interior"
-              className="w-full h-full"
-              onLoad={() => {
-                /* console.log("Plano cargado correctamente") */
+              className="w-full h-auto"
+              onLoad={(e) => {
+                const img = e.target;
+                setImageDimensions({
+                  width: img.naturalWidth,
+                  height: img.naturalHeight,
+                });
+                const rect = img.getBoundingClientRect();
+                setDisplayDimensions({
+                  width: rect.width,
+                  height: rect.height,
+                });
               }}
               onError={() => console.error("Error cargando plano.png")}
             />
@@ -1189,8 +1249,8 @@ const FloorPlanMap = ({
                 <div
                   className="absolute w-2 h-2 bg-blue-500 rounded-full"
                   style={{
-                    left: `${PLAN_IMAGE_WIDTH}px`,
-                    top: `${PLAN_IMAGE_HEIGHT}px`,
+                    left: `${displayDimensions.width || PLAN_IMAGE_WIDTH}px`,
+                    top: `${displayDimensions.height || PLAN_IMAGE_HEIGHT}px`,
                     transform: "translate(-50%, -50%)",
                   }}
                   title="Esquina inferior derecha (0,0)"
@@ -1199,7 +1259,7 @@ const FloorPlanMap = ({
                   className="absolute w-2 h-2 bg-blue-500 rounded-full"
                   style={{
                     left: "0px",
-                    top: `${PLAN_IMAGE_HEIGHT}px`,
+                    top: `${displayDimensions.height || PLAN_IMAGE_HEIGHT}px`,
                     transform: "translate(-50%, -50%)",
                   }}
                   title="Esquina inferior izquierda (5,0)"
@@ -1207,7 +1267,7 @@ const FloorPlanMap = ({
                 <div
                   className="absolute w-2 h-2 bg-blue-500 rounded-full"
                   style={{
-                    left: `${PLAN_IMAGE_WIDTH}px`,
+                    left: `${displayDimensions.width || PLAN_IMAGE_WIDTH}px`,
                     top: "0px",
                     transform: "translate(-50%, -50%)",
                   }}
@@ -1226,27 +1286,6 @@ const FloorPlanMap = ({
             </div>
           </div>
         </div>
-
-        {/* Leyenda del mapa de calor */}
-        {showHeatmap && idwData && (
-          <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur-sm p-3 rounded-lg shadow-lg border">
-            <div className="space-y-2">
-              <div className="text-xs font-medium text-gray-700">
-                Leyenda (dB)
-              </div>
-              <div style={gradientStyle} />
-              <div className="flex justify-between text-xs text-gray-600">
-                <span>{heatmapStats.min?.toFixed(1) || "0.0"}</span>
-                <span>
-                  {heatmapStats.min && heatmapStats.max
-                    ? ((heatmapStats.min + heatmapStats.max) / 2).toFixed(1)
-                    : "0.0"}
-                </span>
-                <span>{heatmapStats.max?.toFixed(1) || "0.0"}</span>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
