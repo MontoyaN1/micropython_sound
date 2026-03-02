@@ -330,7 +330,7 @@ const RealTimePage = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Mapa - ocupa 2/3 del espacio */}
         <div className="lg:col-span-2">
-          <div className="card p-0 overflow-hidden h-full">
+          <div className="card p-4 overflow-visible">
             <div className="p-2 sm:p-3 border-b border-primary-200">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-0">
                 <div className="flex items-center space-x-2">
@@ -349,7 +349,7 @@ const RealTimePage = () => {
               </div>
             </div>
 
-            <div className="h-[50vh] min-h-[300px] sm:h-[70vh] md:h-[500px]">
+            <div className="relative flex justify-center">
               {connected ? (
                 <FloorPlanMap
                   sensorData={sensorData}
@@ -364,7 +364,7 @@ const RealTimePage = () => {
                   key={`floorplan-${showHeatmap}`}
                 />
               ) : (
-                <div className="h-full flex flex-col items-center justify-center space-y-4">
+                <div className="h-[50vh] min-h-[300px] sm:h-[70vh] md:h-[500px] flex flex-col items-center justify-center space-y-4">
                   <div className="w-16 h-16 border-4 border-primary-200 border-t-accent-500 rounded-full animate-spin"></div>
                   <div className="text-center">
                     <h3 className="text-lg font-semibold text-primary-900 mb-1">

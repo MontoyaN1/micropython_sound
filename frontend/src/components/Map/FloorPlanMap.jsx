@@ -117,6 +117,8 @@ const SensorMarker = ({
   micro_id,
   location_name,
   last_update,
+  mapContainerRef,
+  displayDimensions = { width: PLAN_IMAGE_WIDTH, height: PLAN_IMAGE_HEIGHT },
 }) => {
   const getSensorColor = (val) => {
     if (val >= 85) return "bg-red-500 border-red-600 text-red-600";
@@ -127,28 +129,61 @@ const SensorMarker = ({
 
   const colorClasses = getSensorColor(value);
   const [showPopup, setShowPopup] = useState(false);
-  const [tooltipPosition, setTooltipPosition] = useState("top"); // 'top' o 'bottom'
+  const [tooltipPosition, setTooltipPosition] = useState("top"); // 'top', 'bottom', 'left', 'right'
   const containerRef = useRef(null);
 
-  // Calcular posición en metros
-  const metersX = (PLAN_IMAGE_WIDTH - x) / METERS_TO_PIXELS_X;
-  const metersY = (PLAN_IMAGE_HEIGHT - y) / METERS_TO_PIXELS_Y;
+  // Calcular posición en metros usando dimensiones actuales de visualización
+  const displayWidth = displayDimensions?.width || PLAN_IMAGE_WIDTH;
+  const displayHeight = displayDimensions?.height || PLAN_IMAGE_HEIGHT;
+  const scaleX = displayWidth / PLAN_IMAGE_WIDTH;
+  const scaleY = displayHeight / PLAN_IMAGE_HEIGHT;
+
+  const metersX = (displayWidth - x) / (METERS_TO_PIXELS_X * scaleX);
+  const metersY = (displayHeight - y) / (METERS_TO_PIXELS_Y * scaleY);
 
   // Determinar la mejor posición para el tooltip basado en la posición del sensor
   useEffect(() => {
-    if (containerRef.current) {
-      const containerRect = containerRef.current.getBoundingClientRect();
-      const sensorTop = containerRect.top;
+    if (containerRef.current && mapContainerRef?.current) {
+      const sensorRect = containerRef.current.getBoundingClientRect();
+      const mapRect = mapContainerRef.current.getBoundingClientRect();
 
-      // Si el sensor está en la parte superior (menos de 150px desde el borde superior)
-      // mostrar el tooltip abajo, de lo contrario arriba
-      if (sensorTop < 150) {
+      // Calcular espacio disponible dentro del contenedor del mapa
+      const spaceAbove = sensorRect.top - mapRect.top;
+      const spaceBelow = mapRect.bottom - sensorRect.bottom;
+      const spaceLeft = sensorRect.left - mapRect.left;
+      const spaceRight = mapRect.right - sensorRect.right;
+
+      // Umbral mínimo para considerar espacio suficiente (200px para tooltip)
+      const minSpace = 200;
+
+      // Determinar la mejor posición basada en el espacio disponible dentro del mapa
+      if (spaceBelow >= minSpace) {
+        // Espacio suficiente abajo dentro del mapa
         setTooltipPosition("bottom");
-      } else {
+      } else if (spaceAbove >= minSpace) {
+        // Espacio suficiente arriba dentro del mapa
         setTooltipPosition("top");
+      } else if (spaceRight >= minSpace) {
+        // Espacio suficiente a la derecha dentro del mapa
+        setTooltipPosition("right");
+      } else if (spaceLeft >= minSpace) {
+        // Espacio suficiente a la izquierda dentro del mapa
+        setTooltipPosition("left");
+      } else {
+        // Si no hay suficiente espacio en ninguna dirección, usar la que tenga más espacio
+        const spaces = [
+          { dir: "bottom", space: spaceBelow },
+          { dir: "top", space: spaceAbove },
+          { dir: "right", space: spaceRight },
+          { dir: "left", space: spaceLeft },
+        ];
+        const bestPosition = spaces.reduce((best, current) =>
+          current.space > best.space ? current : best,
+        );
+        setTooltipPosition(bestPosition.dir);
       }
     }
-  }, [x, y]);
+  }, [x, y, mapContainerRef]);
 
   return (
     <div
@@ -183,8 +218,14 @@ const SensorMarker = ({
       {/* Popup detallado (hover) - posición dinámica */}
       {showPopup && (
         <div
-          className={`absolute left-1/2 transform -translate-x-1/2 w-64 bg-white rounded-lg shadow-xl p-4 z-[100] border border-gray-200 ${
-            tooltipPosition === "top" ? "bottom-full mb-12" : "top-full mt-12"
+          className={`absolute w-64 bg-white rounded-lg shadow-xl p-4 z-[100] border border-gray-200 ${
+            tooltipPosition === "top"
+              ? "left-1/2 transform -translate-x-1/2 bottom-full mb-12"
+              : tooltipPosition === "bottom"
+                ? "left-1/2 transform -translate-x-1/2 top-full mt-12"
+                : tooltipPosition === "right"
+                  ? "top-1/2 transform -translate-y-1/2 left-full ml-12"
+                  : "top-1/2 transform -translate-y-1/2 right-full mr-12"
           }`}
         >
           <div className="space-y-2">
@@ -217,6 +258,7 @@ const SensorMarker = ({
                 </div>
               </div>
             </div>
+
             <div className="text-xs text-gray-500 border-t pt-2">
               Actualizado:{" "}
               {(() => {
@@ -243,6 +285,7 @@ const HeatmapLayer = memo(
     colorScheme = "viridis",
     opacity = 0.6,
     idwPower = 2,
+    displayDimensions = { width: PLAN_IMAGE_WIDTH, height: PLAN_IMAGE_HEIGHT },
   }) => {
     const canvasRef = useRef(null);
 
@@ -571,13 +614,19 @@ const HeatmapLayer = memo(
 
       // DIFUMINADO MEJORADO: Usar ImageData con interpolación bilineal para transiciones suaves
       // Precalcular factores de conversión
-      const cellWidth = PLAN_IMAGE_WIDTH / cols;
-      const cellHeight = PLAN_IMAGE_HEIGHT / rows;
+      const cellWidth =
+        (displayDimensions.width || PLAN_IMAGE_WIDTH) / (cols - 1);
+      const cellHeight =
+        (displayDimensions.height || PLAN_IMAGE_HEIGHT) / (rows - 1);
 
       // Crear un ImageData más grande para interpolación (2x la resolución)
       const scaleFactor = 2;
-      const scaledWidth = Math.floor(PLAN_IMAGE_WIDTH * scaleFactor);
-      const scaledHeight = Math.floor(PLAN_IMAGE_HEIGHT * scaleFactor);
+      const scaledWidth = Math.floor(
+        (displayDimensions.width || PLAN_IMAGE_WIDTH) * scaleFactor,
+      );
+      const scaledHeight = Math.floor(
+        (displayDimensions.height || PLAN_IMAGE_HEIGHT) * scaleFactor,
+      );
 
       const tempCanvas = document.createElement("canvas");
       tempCanvas.width = scaledWidth;
@@ -724,8 +773,8 @@ const HeatmapLayer = memo(
         scaledHeight,
         0,
         0,
-        PLAN_IMAGE_WIDTH,
-        PLAN_IMAGE_HEIGHT,
+        displayDimensions.width || PLAN_IMAGE_WIDTH,
+        displayDimensions.height || PLAN_IMAGE_HEIGHT,
       );
       ctx.globalAlpha = 1.0;
 
@@ -758,28 +807,44 @@ const HeatmapLayer = memo(
     return (
       <canvas
         ref={canvasRef}
-        width={PLAN_IMAGE_WIDTH}
-        height={PLAN_IMAGE_HEIGHT}
-        className="absolute inset-0 pointer-events-none"
-        style={{ zIndex: 5 }}
+        width={displayDimensions.width || PLAN_IMAGE_WIDTH}
+        height={displayDimensions.height || PLAN_IMAGE_HEIGHT}
+        className="absolute inset-0 pointer-events-none w-full h-auto"
+        style={{
+          zIndex: 5,
+          width: "100%",
+          height: "auto",
+          maxWidth: `${PLAN_IMAGE_WIDTH}px`,
+          maxHeight: "70vh",
+          objectFit: "contain",
+        }}
       />
     );
   },
 );
 
 // Componente para cuadrícula
-const GridOverlay = ({ showGrid }) => {
+const GridOverlay = ({
+  showGrid,
+  displayDimensions = { width: PLAN_IMAGE_WIDTH, height: PLAN_IMAGE_HEIGHT },
+}) => {
   if (!showGrid) return null;
 
   const gridLines = [];
   const cellSizeMeters = 1;
 
+  // Usar dimensiones actuales de visualización
+  const displayWidth = displayDimensions.width || PLAN_IMAGE_WIDTH;
+  const displayHeight = displayDimensions.height || PLAN_IMAGE_HEIGHT;
+  const scaleX = displayWidth / PLAN_IMAGE_WIDTH;
+  const scaleY = displayHeight / PLAN_IMAGE_HEIGHT;
+
   // Líneas verticales (cada 1 metro) - derecha a izquierda
   for (let x = 0; x <= PLAN_WIDTH; x += cellSizeMeters) {
-    // X: 0-5m (derecha=0, izquierda=5) -> píxeles: derecha=202, izquierda=0
+    // X: 0-5m (derecha=0, izquierda=5) -> píxeles: derecha=displayWidth, izquierda=0
     // Asegurar que x esté dentro del rango [0, 5] para evitar problemas de precisión
     const clampedX = Math.max(0, Math.min(5, x));
-    const xPx = PLAN_IMAGE_WIDTH - clampedX * METERS_TO_PIXELS_X;
+    const xPx = displayWidth - clampedX * (METERS_TO_PIXELS_X * scaleX);
     gridLines.push(
       <div
         key={`v-${x}`}
@@ -791,10 +856,10 @@ const GridOverlay = ({ showGrid }) => {
 
   // Líneas horizontales (cada 1 metro) - abajo a arriba
   for (let y = 0; y <= PLAN_HEIGHT; y += cellSizeMeters) {
-    // Y: 0-14m (abajo=0, arriba=14) -> píxeles: abajo=562, arriba=0
+    // Y: 0-14m (abajo=0, arriba=14) -> píxeles: abajo=displayHeight, arriba=0
     // Asegurar que y esté dentro del rango [0, 14] para evitar problemas de precisión
     const clampedY = Math.max(0, Math.min(14, y));
-    const yPx = PLAN_IMAGE_HEIGHT - clampedY * METERS_TO_PIXELS_Y;
+    const yPx = displayHeight - clampedY * (METERS_TO_PIXELS_Y * scaleY);
     gridLines.push(
       <div
         key={`h-${y}`}
@@ -807,7 +872,12 @@ const GridOverlay = ({ showGrid }) => {
   return <>{gridLines}</>;
 };
 
-const EpicenterZone = ({ epicenter, showEpicenter, metersToPixels }) => {
+const EpicenterZone = ({
+  epicenter,
+  showEpicenter,
+  metersToPixels,
+  displayDimensions = { width: PLAN_IMAGE_WIDTH, height: PLAN_IMAGE_HEIGHT },
+}) => {
   console.log("EpicenterZone - Props recibidas:", {
     showEpicenter,
     epicenter,
@@ -842,7 +912,14 @@ const EpicenterZone = ({ epicenter, showEpicenter, metersToPixels }) => {
     epicenter.zone_center_latitude,
   );
 
-  const avgPixelsPerMeter = (METERS_TO_PIXELS_X + METERS_TO_PIXELS_Y) / 2;
+  // Usar dimensiones actuales de visualización
+  const displayWidth = displayDimensions.width || PLAN_IMAGE_WIDTH;
+  const displayHeight = displayDimensions.height || PLAN_IMAGE_HEIGHT;
+  const scaleX = displayWidth / PLAN_IMAGE_WIDTH;
+  const scaleY = displayHeight / PLAN_IMAGE_HEIGHT;
+
+  const avgPixelsPerMeter =
+    (METERS_TO_PIXELS_X * scaleX + METERS_TO_PIXELS_Y * scaleY) / 2;
 
   // Limitar centro para que esté dentro del plano (0-5m, 0-14m)
   const centerX = Math.max(
@@ -1162,25 +1239,24 @@ const FloorPlanMap = ({
   }, [idwData, showHeatmap]);
 
   return (
-    <div className="relative h-full" ref={containerRef}>
+    <div className="relative" ref={containerRef}>
       {/* Contenedor del plano */}
-      <div className="relative h-full rounded-2xl shadow-lg bg-gray-800 overflow-hidden">
+      <div className="relative rounded-2xl shadow-lg bg-gray-800">
         {/* Imagen del plano como fondo - MOSTRAR A TAMAÑO NATURAL */}
-        <div className="relative w-full h-full flex items-center justify-center overflow-auto">
+        <div className="relative w-full flex items-center justify-center">
           <div
             className="relative"
             style={{
               width: "100%",
-              height: "auto",
               maxWidth: `${PLAN_IMAGE_WIDTH}px`,
-              maxHeight: `${PLAN_IMAGE_HEIGHT}px`,
             }}
           >
             <img
               ref={imageRef}
               src="/plano.png"
               alt="Plano interior"
-              className="w-full h-auto"
+              className="w-full h-auto object-contain"
+              style={{ maxHeight: "70vh" }}
               onLoad={(e) => {
                 const img = e.target;
                 setImageDimensions({
@@ -1206,6 +1282,7 @@ const FloorPlanMap = ({
                 colorScheme={colorScheme}
                 opacity={opacity}
                 idwPower={idwPower}
+                displayDimensions={displayDimensions}
               />
 
               {/* Zona Epicentro */}
@@ -1213,6 +1290,7 @@ const FloorPlanMap = ({
                 epicenter={epicenter}
                 showEpicenter={showEpicenter}
                 metersToPixels={metersToPixels}
+                displayDimensions={displayDimensions}
               />
 
               {/* Cuadrícula superpuesta */}
@@ -1220,7 +1298,10 @@ const FloorPlanMap = ({
                 className="absolute inset-0 pointer-events-none"
                 style={{ zIndex: 10 }}
               >
-                <GridOverlay showGrid={showGrid} />
+                <GridOverlay
+                  showGrid={showGrid}
+                  displayDimensions={displayDimensions}
+                />
               </div>
 
               {/* Sensores */}
@@ -1241,6 +1322,8 @@ const FloorPlanMap = ({
                       micro_id={sensor.micro_id}
                       location_name={sensor.location_name}
                       last_update={sensor.last_update}
+                      mapContainerRef={containerRef}
+                      displayDimensions={displayDimensions}
                     />
                   );
                 })}
@@ -1249,8 +1332,8 @@ const FloorPlanMap = ({
                 <div
                   className="absolute w-2 h-2 bg-blue-500 rounded-full"
                   style={{
-                    left: `${displayDimensions.width || PLAN_IMAGE_WIDTH}px`,
-                    top: `${displayDimensions.height || PLAN_IMAGE_HEIGHT}px`,
+                    left: "100%",
+                    top: "100%",
                     transform: "translate(-50%, -50%)",
                   }}
                   title="Esquina inferior derecha (0,0)"
@@ -1258,8 +1341,8 @@ const FloorPlanMap = ({
                 <div
                   className="absolute w-2 h-2 bg-blue-500 rounded-full"
                   style={{
-                    left: "0px",
-                    top: `${displayDimensions.height || PLAN_IMAGE_HEIGHT}px`,
+                    left: "0%",
+                    top: "100%",
                     transform: "translate(-50%, -50%)",
                   }}
                   title="Esquina inferior izquierda (5,0)"
@@ -1267,8 +1350,8 @@ const FloorPlanMap = ({
                 <div
                   className="absolute w-2 h-2 bg-blue-500 rounded-full"
                   style={{
-                    left: `${displayDimensions.width || PLAN_IMAGE_WIDTH}px`,
-                    top: "0px",
+                    left: "100%",
+                    top: "0%",
                     transform: "translate(-50%, -50%)",
                   }}
                   title="Esquina superior derecha (0,14)"
@@ -1276,8 +1359,8 @@ const FloorPlanMap = ({
                 <div
                   className="absolute w-2 h-2 bg-blue-500 rounded-full"
                   style={{
-                    left: "0px",
-                    top: "0px",
+                    left: "0%",
+                    top: "0%",
                     transform: "translate(-50%, -50%)",
                   }}
                   title="Esquina superior izquierda (5,14)"
