@@ -1066,6 +1066,69 @@ const EpicenterZone = ({
   );
 };
 
+const DoorAnnotation = ({
+  tilesToPixels,
+  displayDimensions = { width: PLAN_IMAGE_WIDTH, height: PLAN_IMAGE_HEIGHT },
+}) => {
+  // Coordenadas en baldosas: desde (25,0) hasta (30,0)
+  // Esto representa una línea horizontal en el borde inferior del mapa
+  const startBaldosas = { x: 25, y: 0 };
+  const endBaldosas = { x: 30, y: 0 };
+
+  // Convertir a píxeles
+  const startPx = tilesToPixels(startBaldosas.x, startBaldosas.y);
+  const endPx = tilesToPixels(endBaldosas.x, endBaldosas.y);
+
+  // Calcular centro para la etiqueta
+  const centerPx = {
+    x: (startPx.x + endPx.x) / 2,
+    y: (startPx.y + endPx.y) / 2,
+  };
+
+  // Calcular longitud y ángulo de la línea
+  const lineLength = Math.sqrt(
+    Math.pow(endPx.x - startPx.x, 2) + Math.pow(endPx.y - startPx.y, 2),
+  );
+  const lineAngle = Math.atan2(endPx.y - startPx.y, endPx.x - startPx.x);
+
+  return (
+    <div
+      className="absolute inset-0 pointer-events-none"
+      style={{ zIndex: 20 }}
+    >
+      {/* Línea roja */}
+      <div
+        className="absolute bg-red-600 border-2 border-white"
+        style={{
+          left: `${startPx.x}px`,
+          top: `${startPx.y}px`,
+          width: `${lineLength}px`,
+          height: "8px",
+          transform: `translate(0, -100%) rotate(${lineAngle}rad)`,
+          transformOrigin: "0 100%",
+          boxShadow:
+            "0 0 8px rgba(220, 38, 38, 0.9), 0 0 4px rgba(255, 255, 255, 0.8)",
+          zIndex: 21,
+        }}
+      />
+
+      {/* Etiqueta "puerta" */}
+      <div
+        className="absolute bg-red-700 text-white text-sm font-bold px-3 py-1.5 rounded-lg shadow-xl border-2 border-white"
+        style={{
+          left: `${centerPx.x}px`,
+          top: `${centerPx.y - 40}px`,
+          transform: "translate(-50%, -100%)",
+          whiteSpace: "nowrap",
+          zIndex: 22,
+        }}
+      >
+        PUERTA
+      </div>
+    </div>
+  );
+};
+
 const FloorPlanMap = ({
   sensorData,
   idwData,
@@ -1792,6 +1855,12 @@ const FloorPlanMap = ({
             <EpicenterZone
               epicenter={epicenter}
               showEpicenter={showEpicenter}
+              tilesToPixels={tilesToPixels}
+              displayDimensions={{ width: baseWidth, height: baseHeight }}
+            />
+
+            {/* Anotación de Puerta */}
+            <DoorAnnotation
               tilesToPixels={tilesToPixels}
               displayDimensions={{ width: baseWidth, height: baseHeight }}
             />
