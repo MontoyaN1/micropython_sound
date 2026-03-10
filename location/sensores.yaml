@@ -1,42 +1,63 @@
 # Configuración de sensores para sistema de monitoreo acústico
-# Sistema de coordenadas relativas para plano de 5x14 metros
+# Sistema de coordenadas relativas para plano de 57x66 baldosas
+# (57 baldosas × 0.3m = 17.1m de ancho, 66 baldosas × 0.3m = 19.8m de profundidad)
 #
 # Formato:
-#   x: 0-5 metros (derecha=0, izquierda=5)
-#   y: 0-14 metros (abajo=0, arriba=14)
-#   coordinates_type: "relative" para coordenadas relativas en metros
+#   x: 0-57 baldosas (derecha=0, izquierda=57)
+#   y: 0-66 baldosas (abajo=0, arriba=66)
+#   coordinates_type: "relative" para coordenadas relativas en baldosas
 #   room: Nombre descriptivo de la ubicación
+#
+# Equivalencia:
+#   1 baldosa = 0.3 metros (30 cm)
+#   Ancho: 57 baldosas = 17.1 metros
+#   Alto: 66 baldosas = 19.8 metros
 
 microcontrollers:
   micro_E1:
-    location: [1.5, 3] # x=1.5m, y=3m
+    location: [20, 7]
     coordinates_type: "relative"
-    room: "Exterior 1"
+    room: "Entrada Izquierda"
 
   micro_E2:
-    location: [3.5, 2] # x=3.5m, y=2m
+    location: [41, 11]
     coordinates_type: "relative"
-    room: "Exterior 2"
+    room: "Entrada Derecha"
 
   micro_E3:
-    location: [1.5, 7] # x=1.5m, y=7m
+    location: [50, 23]
     coordinates_type: "relative"
-    room: "Sala - Entrada"
+    room: "Lateral Derecho"
 
   micro_E4:
-    location: [1.5, 11] # x=1.5m, y=11m
+    location: [7, 23]
     coordinates_type: "relative"
-    room: "Sala - lavadero"
+    room: "Lateral Izquierda"
 
   micro_E5:
-    location: [3.5, 11] # x=3.5m, y=11m
+    location: [23, 40]
     coordinates_type: "relative"
-    room: "Cocina"
+    room: "Centro"
 
-  micro_E255:
-    location: [3.5, 6] # x=3.5m, y=6m
+  micro_E6:
+    location: [49, 41]
     coordinates_type: "relative"
-    room: "Oficina"
+    room: "Domo"
+
+  micro_E7:
+    location: [7, 56]
+    coordinates_type: "relative"
+    room: "Cuarto Superior"
+
+  micro_E8:
+    location: [36, 61]
+    coordinates_type: "relative"
+    room: "Superior Medio"
+
+  micro_E9:
+    location: [49, 61]
+    coordinates_type: "relative"
+    room: "Esquina Superior Derecha"
 
 # Notas:
 # 1. El sistema convierte automáticamente (x, y) a (latitude=y, longitude=x) para el frontend

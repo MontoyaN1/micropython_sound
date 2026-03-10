@@ -4,6 +4,13 @@ import FloorPlanMap from "../components/Map/FloorPlanMap";
 import { useWebSocket } from "../hooks/useWebSocket";
 import { testSensorData, testIdwData, testEpicenter } from "../utils/testData";
 
+// Configuración del plano (consistente con FloorPlanMap.jsx)
+const TILE_SIZE_METERS = 0.3; // 30 cm por baldosa
+const TILES_WIDTH = 57; // número de baldosas en X (ancho)
+const TILES_HEIGHT = 66; // número de baldosas en Y (alto)
+const PLAN_WIDTH_METERS = TILES_WIDTH * TILE_SIZE_METERS; // 17.1 metros
+const PLAN_HEIGHT_METERS = TILES_HEIGHT * TILE_SIZE_METERS; // 19.8 metros
+
 const RealTimePage = () => {
   const {
     connected,
@@ -330,7 +337,10 @@ const RealTimePage = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Mapa - ocupa 2/3 del espacio */}
         <div className="lg:col-span-2">
-          <div className="card p-4 overflow-visible">
+          <div
+            className="card p-4 overflow-hidden"
+            style={{ overscrollBehavior: "none" }}
+          >
             <div className="p-2 sm:p-3 border-b border-primary-200">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-0">
                 <div className="flex items-center space-x-2">
@@ -343,13 +353,13 @@ const RealTimePage = () => {
                 </div>
                 <div className="flex items-center space-x-2 sm:space-x-3 text-xs">
                   <span className="text-primary-600">
-                    {sensorData.length} sensores • 5m × 14m
+                    {sensorData.length} sensores • 17.1m × 19.8m
                   </span>
                 </div>
               </div>
             </div>
 
-            <div className="relative flex justify-center">
+            <div className="relative min-h-[500px]">
               {connected ? (
                 <FloorPlanMap
                   sensorData={sensorData}
@@ -465,19 +475,24 @@ const RealTimePage = () => {
                 <div className="space-y-1 text-xs text-primary-600">
                   <div className="flex justify-between">
                     <span>Dimensiones:</span>
-                    <span className="font-medium">5m × 14m</span>
+                    <span className="font-medium">
+                      {PLAN_WIDTH_METERS.toFixed(1)}m ×{" "}
+                      {PLAN_HEIGHT_METERS.toFixed(1)}m
+                    </span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Cuadrícula:</span>
-                    <span className="font-medium">1m × 1m</span>
+                    <span>Baldosas:</span>
+                    <span className="font-medium">
+                      {TILES_WIDTH} × {TILES_HEIGHT}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span>Sensores activos:</span>
                     <span className="font-medium">{sensorData.length}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Escala:</span>
-                    <span className="font-medium">40.4 px/m</span>
+                    <span>Baldosa:</span>
+                    <span className="font-medium">30cm × 30cm</span>
                   </div>
                 </div>
               </div>
@@ -623,71 +638,79 @@ const RealTimePage = () => {
               </tr>
             </thead>
             <tbody>
-              {sensorData.map((sensor) => (
-                <tr
-                  key={sensor.micro_id}
-                  className="border-b border-primary-100 hover:bg-primary-50"
-                >
-                  <td className="py-2 px-2 sm:py-3 sm:px-4">
-                    <div className="font-medium text-xs sm:text-sm">
-                      {sensor.micro_id}
-                    </div>
-                  </td>
-                  <td className="py-2 px-2 sm:py-3 sm:px-4">
-                    <div className="text-xs sm:text-sm">
-                      {sensor.location_name}
-                    </div>
-                  </td>
-                  <td className="py-2 px-2 sm:py-3 sm:px-4">
-                    <div className="flex items-center space-x-1 sm:space-x-2">
-                      <div
-                        className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full ${
-                          sensor.value >= 85
-                            ? "bg-red-500"
-                            : sensor.value >= 70
-                              ? "bg-orange-500"
-                              : sensor.value >= 50
-                                ? "bg-yellow-500"
-                                : "bg-green-500"
-                        }`}
-                      ></div>
+              {sensorData
+                .slice() // Crear copia para no mutar el array original
+                .sort((a, b) => {
+                  // Extraer números de los Micro IDs (ej: "E1" -> 1, "E2" -> 2)
+                  const numA = parseInt(a.micro_id.replace(/\D/g, "")) || 0;
+                  const numB = parseInt(b.micro_id.replace(/\D/g, "")) || 0;
+                  return numA - numB;
+                })
+                .map((sensor) => (
+                  <tr
+                    key={sensor.micro_id}
+                    className="border-b border-primary-100 hover:bg-primary-50"
+                  >
+                    <td className="py-2 px-2 sm:py-3 sm:px-4">
+                      <div className="font-medium text-xs sm:text-sm">
+                        {sensor.micro_id}
+                      </div>
+                    </td>
+                    <td className="py-2 px-2 sm:py-3 sm:px-4">
+                      <div className="text-xs sm:text-sm">
+                        {sensor.location_name}
+                      </div>
+                    </td>
+                    <td className="py-2 px-2 sm:py-3 sm:px-4">
+                      <div className="flex items-center space-x-1 sm:space-x-2">
+                        <div
+                          className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full ${
+                            sensor.value >= 85
+                              ? "bg-red-500"
+                              : sensor.value >= 70
+                                ? "bg-orange-500"
+                                : sensor.value >= 50
+                                  ? "bg-yellow-500"
+                                  : "bg-green-500"
+                          }`}
+                        ></div>
+                        <span
+                          className={`font-bold text-xs sm:text-sm ${
+                            sensor.value >= 85
+                              ? "text-red-600"
+                              : sensor.value >= 70
+                                ? "text-orange-600"
+                                : sensor.value >= 50
+                                  ? "text-yellow-600"
+                                  : "text-green-600"
+                          }`}
+                        >
+                          {sensor.value.toFixed(1)} dB
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-2 px-2 sm:py-3 sm:px-4">
                       <span
-                        className={`font-bold text-xs sm:text-sm ${
+                        className={`px-1.5 py-0.5 sm:px-2 sm:py-1 text-xs font-medium rounded-lg ${
                           sensor.value >= 85
-                            ? "text-red-600"
+                            ? "text-red-600 bg-red-50 border border-red-200"
                             : sensor.value >= 70
-                              ? "text-orange-600"
+                              ? "text-orange-600 bg-orange-50 border border-orange-200"
                               : sensor.value >= 50
-                                ? "text-yellow-600"
-                                : "text-green-600"
+                                ? "text-yellow-600 bg-yellow-50 border border-yellow-200"
+                                : "text-green-600 bg-green-50 border border-green-200"
                         }`}
                       >
-                        {sensor.value.toFixed(1)} dB
+                        {getNoiseLevelLabel(sensor.value)}
                       </span>
-                    </div>
-                  </td>
-                  <td className="py-2 px-2 sm:py-3 sm:px-4">
-                    <span
-                      className={`px-1.5 py-0.5 sm:px-2 sm:py-1 text-xs font-medium rounded-lg ${
-                        sensor.value >= 85
-                          ? "text-red-600 bg-red-50 border border-red-200"
-                          : sensor.value >= 70
-                            ? "text-orange-600 bg-orange-50 border border-orange-200"
-                            : sensor.value >= 50
-                              ? "text-yellow-600 bg-yellow-50 border border-yellow-200"
-                              : "text-green-600 bg-green-50 border border-green-200"
-                      }`}
-                    >
-                      {getNoiseLevelLabel(sensor.value)}
-                    </span>
-                  </td>
-                  <td className="py-2 px-2 sm:py-3 sm:px-4">
-                    <div className="text-xs sm:text-sm text-primary-600">
-                      {formatTime(sensor.last_update)}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="py-2 px-2 sm:py-3 sm:px-4">
+                      <div className="text-xs sm:text-sm text-primary-600">
+                        {formatTime(sensor.last_update)}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
             </tbody>
           </table>
         </div>
