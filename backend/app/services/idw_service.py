@@ -10,9 +10,9 @@ def calculate_idw(
     x: np.ndarray,
     y: np.ndarray,
     z: np.ndarray,
-    grid_size: int = 50,
+    grid_size: int = 60,
     power: float = 2.0,
-    margin_percent: float = 0.1
+    margin_percent: float = 0.0
 ) -> Optional[Dict[str, Any]]:
     """
     Calcular interpolación IDW para un conjunto de puntos.
@@ -33,28 +33,12 @@ def calculate_idw(
         return None
     
     try:
-        # Calcular límites con margen
-        x_min, x_max = x.min(), x.max()
-        y_min, y_max = y.min(), y.max()
-        
-        x_range = x_max - x_min
-        y_range = y_max - y_min
-        
-        # Añadir margen
-        x_margin = x_range * margin_percent
-        y_margin = y_range * margin_percent
-        
-        x_min -= x_margin
-        x_max += x_margin
-        y_min -= y_margin
-        y_max += y_margin
-        
-        # Para coordenadas relativas, limitar al tamaño del plano (0-5, 0-14)
-        # Pero mantener margen para visualización
-        x_min = max(x_min, -1.0)  # Permitir margen negativo
-        x_max = min(x_max, 6.0)   # Permitir margen positivo
-        y_min = max(y_min, -2.0)  # Permitir margen negativo
-        y_max = min(y_max, 16.0)  # Permitir margen positivo
+        # Usar el plano completo de baldosas (0-57 en X, 0-66 en Y)
+        # para que el mapa de calor cubra toda el área
+        x_min = 0.0
+        x_max = 57.0
+        y_min = 0.0
+        y_max = 66.0
         
         # Generar distribución IDW
         xi, yi, zi = generar_distribucion_idw(

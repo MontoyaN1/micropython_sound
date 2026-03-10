@@ -1,21 +1,22 @@
-import { useState, useEffect, useRef, useMemo, memo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback, memo } from "react";
 import { Activity, Map, Grid } from "lucide-react";
 
 // Configuración del plano
-const PLAN_WIDTH = 5; // metros
-const PLAN_HEIGHT = 14; // metros
-const PLAN_IMAGE_WIDTH = 202; // píxeles
-const PLAN_IMAGE_HEIGHT = 562; // píxeles
+// 57 baldosas × 0.3 metros = 17.1 metros de ancho
+// 66 baldosas × 0.3 metros = 19.8 metros de profundidad
+const TILE_SIZE_METERS = 0.3; // 30 cm por baldosa
+const TILES_WIDTH = 57; // número de baldosas en X (ancho)
+const TILES_HEIGHT = 66; // número de baldosas en Y (alto)
+const PLAN_WIDTH_TILES = TILES_WIDTH; // 57 baldosas (eje X)
+const PLAN_HEIGHT_TILES = TILES_HEIGHT; // 66 baldosas (eje Y)
 
-// Sin márgenes - la imagen ocupa todo el espacio
-const IMAGE_MARGIN_LEFT = 0; // píxeles
-const IMAGE_MARGIN_TOP = 0; // píxeles
-const VISIBLE_WIDTH = PLAN_IMAGE_WIDTH; // 202px
-const VISIBLE_HEIGHT = PLAN_IMAGE_HEIGHT; // 562px
+// Dimensiones base en píxeles (escalable)
+const BASE_TILE_PIXELS = 20; // píxeles por baldosa base
+const PLAN_IMAGE_WIDTH = TILES_WIDTH * BASE_TILE_PIXELS; // 1140px
+const PLAN_IMAGE_HEIGHT = TILES_HEIGHT * BASE_TILE_PIXELS; // 1320px
 
-// Factor de conversión para toda la imagen
-const METERS_TO_PIXELS_X = VISIBLE_WIDTH / PLAN_WIDTH; // 202px / 5m = 40.4 px/m
-const METERS_TO_PIXELS_Y = VISIBLE_HEIGHT / PLAN_HEIGHT; // 562px / 14m = 40.14 px/m
+// Factores de conversión de baldosas a píxeles
+const TILES_TO_PIXELS = BASE_TILE_PIXELS; // 20px por baldosa
 
 // Paletas de colores profesionales (compatibles con Plotly)
 const colorPalettes = {
@@ -132,14 +133,14 @@ const SensorMarker = ({
   const [tooltipPosition, setTooltipPosition] = useState("top"); // 'top', 'bottom', 'left', 'right'
   const containerRef = useRef(null);
 
-  // Calcular posición en metros usando dimensiones actuales de visualización
+  // Calcular posición en baldosas usando dimensiones actuales de visualización
   const displayWidth = displayDimensions?.width || PLAN_IMAGE_WIDTH;
   const displayHeight = displayDimensions?.height || PLAN_IMAGE_HEIGHT;
   const scaleX = displayWidth / PLAN_IMAGE_WIDTH;
   const scaleY = displayHeight / PLAN_IMAGE_HEIGHT;
 
-  const metersX = (displayWidth - x) / (METERS_TO_PIXELS_X * scaleX);
-  const metersY = (displayHeight - y) / (METERS_TO_PIXELS_Y * scaleY);
+  const tilesX = (displayWidth - x) / (TILES_TO_PIXELS * scaleX);
+  const tilesY = (displayHeight - y) / (TILES_TO_PIXELS * scaleY);
 
   // Determinar la mejor posición para el tooltip basado en la posición del sensor
   useEffect(() => {
@@ -242,7 +243,7 @@ const SensorMarker = ({
               <div>
                 <div className="text-gray-500">Coordenadas</div>
                 <div>
-                  {metersX.toFixed(1)}m, {metersY.toFixed(1)}m
+                  {tilesX.toFixed(1)} baldosas, {tilesY.toFixed(1)} baldosas
                 </div>
               </div>
               <div>
@@ -281,13 +282,15 @@ const HeatmapLayer = memo(
   ({
     idwData,
     showHeatmap,
-    metersToPixels,
+    tilesToPixels,
     colorScheme = "viridis",
     opacity = 0.6,
     idwPower = 2,
     displayDimensions = { width: PLAN_IMAGE_WIDTH, height: PLAN_IMAGE_HEIGHT },
   }) => {
     const canvasRef = useRef(null);
+    const animationFrameRef = useRef(null);
+    const prevDataHashRef = useRef("");
 
     // Usar paletas globales definidas arriba
 
@@ -296,28 +299,33 @@ const HeatmapLayer = memo(
       return getColorFromPalette(colorScheme, normalizedValue, opacity);
     };
 
-    // Caché de colores para máxima velocidad (LUT - Look Up Table)
+    // Caché de colores optimizada para máxima velocidad (LUT - Look Up Table)
+    // Almacena componentes RGBA como arrays [R, G, B, A] para acceso directo
     const colorLUT = useMemo(() => {
-      const lut = [];
+      const lut = new Array(256); // 256 valores posibles (0-255)
       const palette = colorPalettes[colorScheme] || colorPalettes.viridis;
-      const lutSize = 256; // 256 valores posibles (0-255)
+      const alpha = Math.round(opacity * 255);
 
-      for (let i = 0; i < lutSize; i++) {
-        const normalizedValue = i / (lutSize - 1);
-        let color;
+      for (let i = 0; i < 256; i++) {
+        const normalizedValue = i / 255;
 
         // Interpolación lineal para todos los esquemas
         const index = Math.floor(normalizedValue * (palette.length - 1));
         const colorIdx = Math.max(0, Math.min(index, palette.length - 1));
-        color = palette[colorIdx];
+        const color = palette[colorIdx];
 
-        lut[i] =
-          `rgba(${Math.round(color[0] * 255)}, ${Math.round(color[1] * 255)}, ${Math.round(color[2] * 255)}, ${opacity})`;
+        // Almacenar como array [R, G, B, A] para acceso ultra rápido
+        lut[i] = [
+          Math.round(color[0] * 255), // R
+          Math.round(color[1] * 255), // G
+          Math.round(color[2] * 255), // B
+          alpha, // A (opacidad precalculada)
+        ];
       }
       return lut;
     }, [colorScheme, opacity]);
 
-    // Función optimizada para obtener color RGBA como string rgba() usando LUT
+    // Función optimizada para obtener color RGBA como array [R, G, B, A] usando LUT
     const getColorFast = (normalizedValue) => {
       const lutIndex = Math.floor(normalizedValue * 255);
       const idx = Math.max(0, Math.min(lutIndex, 255));
@@ -341,10 +349,10 @@ const HeatmapLayer = memo(
       xi,
       yi,
       zi,
-      targetCols = 15,
-      targetRows = 42,
+      targetCols = 57,
+      targetRows = 66,
     ) => {
-      // Crear grilla que cubra TODO el plano (0-5m en X, 0-14m en Y)
+      // Crear grilla que cubra TODO el plano (0-57 baldosas en X, 0-66 baldosas en Y)
       const fullXi = [];
       const fullYi = [];
       const fullZi = [];
@@ -372,25 +380,25 @@ const HeatmapLayer = memo(
         }
       }
 
-      // Si no se encontraron límites válidos, usar plano completo
+      // Si no se encontraron límites válidos, usar plano completo en baldosas
       if (!isFinite(minX) || !isFinite(maxX)) {
         minX = 0;
-        maxX = PLAN_WIDTH;
+        maxX = PLAN_WIDTH_TILES;
       }
       if (!isFinite(minY) || !isFinite(maxY)) {
         minY = 0;
-        maxY = PLAN_HEIGHT;
+        maxY = PLAN_HEIGHT_TILES;
       }
 
       // Asegurar que haya rango positivo para evitar división por cero
       let xRange = maxX - minX;
       let yRange = maxY - minY;
-      if (xRange <= 0) xRange = PLAN_WIDTH;
-      if (yRange <= 0) yRange = PLAN_HEIGHT;
+      if (xRange <= 0) xRange = PLAN_WIDTH_TILES;
+      if (yRange <= 0) yRange = PLAN_HEIGHT_TILES;
 
-      // Paso en metros para cubrir todo el plano
-      const xStep = PLAN_WIDTH / (targetCols - 1);
-      const yStep = PLAN_HEIGHT / (targetRows - 1);
+      // Paso en baldosas para cubrir todo el plano
+      const xStep = PLAN_WIDTH_TILES / (targetCols - 1);
+      const yStep = PLAN_HEIGHT_TILES / (targetRows - 1);
 
       // Crear grilla densa que cubra TODO el plano con interpolación bilineal
       for (let i = 0; i < targetRows; i++) {
@@ -398,19 +406,19 @@ const HeatmapLayer = memo(
         fullYi[i] = [];
         fullZi[i] = [];
 
-        // Coordenada Y en el plano (0-14m)
-        const yMeters = Math.max(0, Math.min(PLAN_HEIGHT, i * yStep));
+        // Coordenada Y en baldosas (0-66)
+        const yTiles = Math.max(0, Math.min(PLAN_HEIGHT_TILES, i * yStep));
 
         for (let j = 0; j < targetCols; j++) {
-          // Coordenada X en el plano (0-5m)
-          const xMeters = Math.max(0, Math.min(PLAN_WIDTH, j * xStep));
+          // Coordenada X en baldosas (0-57)
+          const xTiles = Math.max(0, Math.min(PLAN_WIDTH_TILES, j * xStep));
 
-          fullXi[i][j] = xMeters;
-          fullYi[i][j] = yMeters;
+          fullXi[i][j] = xTiles;
+          fullYi[i][j] = yTiles;
 
-          // Convertir coordenadas del plano (0-5m, 0-14m) al rango de los datos del backend
-          const xBackend = minX + (xMeters / PLAN_WIDTH) * xRange;
-          const yBackend = minY + (yMeters / PLAN_HEIGHT) * yRange;
+          // Convertir coordenadas del plano (0-57 baldosas, 0-66 baldosas) al rango de los datos del backend
+          const xBackend = minX + (xTiles / PLAN_WIDTH_TILES) * xRange;
+          const yBackend = minY + (yTiles / PLAN_HEIGHT_TILES) * yRange;
 
           // INTERPOLACIÓN BILINEAL DIRECTA de la grilla original
           const origGridCols = zi[0]?.length || 0;
@@ -551,13 +559,16 @@ const HeatmapLayer = memo(
         },
       );
 
+      console.log(
+        `[${new Date().toISOString()}] HeatmapLayer - Estado showHeatmap: ${showHeatmap}, idwData presente: ${!!idwData}`,
+      );
+
       if (
         !showHeatmap ||
         !idwData ||
         !idwData.xi ||
         !idwData.yi ||
-        !idwData.zi ||
-        !metersToPixels
+        !idwData.zi
       ) {
         // Limpiar canvas si no hay datos o está desactivado
         const canvas = canvasRef.current;
@@ -565,234 +576,200 @@ const HeatmapLayer = memo(
           const ctx = canvas.getContext("2d");
           ctx.clearRect(0, 0, canvas.width, canvas.height);
           console.log(
-            `[${new Date().toISOString()}] HeatmapLayer - Canvas limpiado (sin datos o desactivado)`,
+            `[${new Date().toISOString()}] HeatmapLayer - Canvas limpiado (showHeatmap=${showHeatmap}, idwData válido=${!!idwData})`,
           );
         }
         return;
       }
+
+      console.log(
+        `[${new Date().toISOString()}] HeatmapLayer - Condiciones OK: showHeatmap=true, idwData válido`,
+      );
 
       const canvas = canvasRef.current;
       if (!canvas) return;
 
-      const ctx = canvas.getContext("2d");
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      console.log(
-        `[${new Date().toISOString()}] HeatmapLayer - Iniciando renderizado del mapa de calor`,
-      );
-
-      if (!fullXi || !fullYi || !fullZi || fullZi.length === 0) {
+      // Cancelar animation frame anterior si existe
+      if (animationFrameRef.current) {
         console.log(
-          `[${new Date().toISOString()}] HeatmapLayer - No hay grilla válida para renderizar`,
+          `[${new Date().toISOString()}] HeatmapLayer - Cancelando animation frame anterior`,
         );
-        return;
+        cancelAnimationFrame(animationFrameRef.current);
       }
 
       console.log(
-        `[${new Date().toISOString()}] HeatmapLayer - Estructura de datos:`,
-        {
-          fullXi_length: fullXi.length,
-          fullYi_length: fullYi.length,
-          fullZi_rows: fullZi.length,
-          fullZi_cols: fullZi[0]?.length || 0,
-          minVal,
-          maxVal,
-          valueRange,
-        },
+        `[${new Date().toISOString()}] HeatmapLayer - Programando nuevo animation frame`,
       );
 
-      // Usar valores memoizados minVal, maxVal, valueRange
-      const rows = fullZi.length;
-      const cols = fullZi[0]?.length || 0;
+      // Usar requestAnimationFrame para renderizado no bloqueante
+      animationFrameRef.current = requestAnimationFrame(() => {
+        console.log(
+          `[${new Date().toISOString()}] HeatmapLayer - Animation frame ejecutándose`,
+        );
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        console.log(
+          `[${new Date().toISOString()}] HeatmapLayer - Iniciando renderizado del mapa de calor`,
+        );
 
-      // console.log("HeatmapLayer - Grilla completa:", {
-      //   rows,
-      //   cols,
-      //   minVal: minVal.toFixed(2),
-      //   maxVal: maxVal.toFixed(2),
-      //   cubreTodoElPlano: true,
-      // });
-
-      // DIFUMINADO MEJORADO: Usar ImageData con interpolación bilineal para transiciones suaves
-      // Precalcular factores de conversión
-      const cellWidth =
-        (displayDimensions.width || PLAN_IMAGE_WIDTH) / (cols - 1);
-      const cellHeight =
-        (displayDimensions.height || PLAN_IMAGE_HEIGHT) / (rows - 1);
-
-      // Crear un ImageData más grande para interpolación (2x la resolución)
-      const scaleFactor = 2;
-      const scaledWidth = Math.floor(
-        (displayDimensions.width || PLAN_IMAGE_WIDTH) * scaleFactor,
-      );
-      const scaledHeight = Math.floor(
-        (displayDimensions.height || PLAN_IMAGE_HEIGHT) * scaleFactor,
-      );
-
-      const tempCanvas = document.createElement("canvas");
-      tempCanvas.width = scaledWidth;
-      tempCanvas.height = scaledHeight;
-      const tempCtx = tempCanvas.getContext("2d");
-      const imageData = tempCtx.createImageData(scaledWidth, scaledHeight);
-      const data = imageData.data;
-
-      // Primero: crear una grilla de valores interpolados más densa
-      const denseRows = rows * 2;
-      const denseCols = cols * 2;
-      const denseValues = new Array(denseRows);
-
-      for (let i = 0; i < denseRows; i++) {
-        denseValues[i] = new Array(denseCols);
-        for (let j = 0; j < denseCols; j++) {
-          // Coordenadas en la grilla densa
-          const denseY = i / (denseRows - 1);
-          const denseX = j / (denseCols - 1);
-
-          // Coordenadas en la grilla original
-          const origRow = denseY * (rows - 1);
-          const origCol = denseX * (cols - 1);
-
-          // Interpolación bilineal
-          const row1 = Math.floor(origRow);
-          const row2 = Math.min(row1 + 1, rows - 1);
-          const col1 = Math.floor(origCol);
-          const col2 = Math.min(col1 + 1, cols - 1);
-
-          const tRow = origRow - row1;
-          const tCol = origCol - col1;
-
-          // Valores de los 4 puntos más cercanos
-          const v11 = fullZi[row1]?.[col1] || 0;
-          const v12 = fullZi[row1]?.[col2] || 0;
-          const v21 = fullZi[row2]?.[col1] || 0;
-          const v22 = fullZi[row2]?.[col2] || 0;
-
-          // Interpolación bilineal
-          const v1 = v11 * (1 - tCol) + v12 * tCol;
-          const v2 = v21 * (1 - tCol) + v22 * tCol;
-          denseValues[i][j] = v1 * (1 - tRow) + v2 * tRow;
-        }
-      }
-
-      // Segundo: aplicar un filtro de convolución gaussiano para suavizar
-      const kernelSize = 3;
-      const kernel = [
-        [1, 2, 1],
-        [2, 4, 2],
-        [1, 2, 1],
-      ];
-      const kernelSum = 16;
-
-      const smoothedValues = new Array(denseRows);
-      for (let i = 0; i < denseRows; i++) {
-        smoothedValues[i] = new Array(denseCols);
-        for (let j = 0; j < denseCols; j++) {
-          let sum = 0;
-          let weightSum = 0;
-
-          for (let ki = -1; ki <= 1; ki++) {
-            for (let kj = -1; kj <= 1; kj++) {
-              const ni = i + ki;
-              const nj = j + kj;
-
-              if (ni >= 0 && ni < denseRows && nj >= 0 && nj < denseCols) {
-                const weight = kernel[ki + 1][kj + 1];
-                sum += denseValues[ni][nj] * weight;
-                weightSum += weight;
-              }
-            }
-          }
-
-          smoothedValues[i][j] = sum / weightSum;
-        }
-      }
-
-      // Tercero: dibujar en el ImageData con interpolación suave
-      for (let i = 0; i < scaledHeight; i++) {
-        for (let j = 0; j < scaledWidth; j++) {
-          // Coordenadas en la grilla suavizada
-          const gridY = (i / (scaledHeight - 1)) * (denseRows - 1);
-          const gridX = (j / (scaledWidth - 1)) * (denseCols - 1);
-
-          const row1 = Math.floor(gridY);
-          const row2 = Math.min(row1 + 1, denseRows - 1);
-          const col1 = Math.floor(gridX);
-          const col2 = Math.min(col1 + 1, denseCols - 1);
-
-          const tRow = gridY - row1;
-          const tCol = gridX - col1;
-
-          // Valores interpolados de la grilla suavizada
-          const v11 = smoothedValues[row1]?.[col1] || 0;
-          const v12 = smoothedValues[row1]?.[col2] || 0;
-          const v21 = smoothedValues[row2]?.[col1] || 0;
-          const v22 = smoothedValues[row2]?.[col2] || 0;
-
-          const v1 = v11 * (1 - tCol) + v12 * tCol;
-          const v2 = v21 * (1 - tCol) + v22 * tCol;
-          const finalValue = v1 * (1 - tRow) + v2 * tRow;
-
-          // Normalizar valor usando min/max dinámicos basados en datos reales
-          const normalizedVal = (finalValue - minVal) / valueRange;
-
-          // Obtener color
-          const color = getColorFast(normalizedVal);
-
-          // Extraer componentes RGBA
-          const rgbaMatch = color.match(
-            /rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/,
+        if (!fullXi || !fullYi || !fullZi || fullZi.length === 0) {
+          console.log(
+            `[${new Date().toISOString()}] HeatmapLayer - No hay grilla válida para renderizar`,
           );
-          if (rgbaMatch) {
-            const idx = (i * scaledWidth + j) * 4;
-            data[idx] = parseInt(rgbaMatch[1]); // R
-            data[idx + 1] = parseInt(rgbaMatch[2]); // G
-            data[idx + 2] = parseInt(rgbaMatch[3]); // B
-            data[idx + 3] = rgbaMatch[4]
-              ? Math.floor(parseFloat(rgbaMatch[4]) * 255)
-              : 255; // A
+          return;
+        }
+
+        console.log(
+          `[${new Date().toISOString()}] HeatmapLayer - Estructura de datos:`,
+          {
+            fullXi_length: fullXi.length,
+            fullYi_length: fullYi.length,
+            fullZi_rows: fullZi.length,
+            fullZi_cols: fullZi[0]?.length || 0,
+            minVal,
+            maxVal,
+            valueRange,
+          },
+        );
+
+        // Usar valores memoizados minVal, maxVal, valueRange
+        const rows = fullZi.length;
+        const cols = fullZi[0]?.length || 0;
+
+        // console.log("HeatmapLayer - Grilla completa:", {
+        //   rows,
+        //   cols,
+        //   minVal: minVal.toFixed(2),
+        //   maxVal: maxVal.toFixed(2),
+        //   cubreTodoElPlano: true,
+        // });
+
+        // RENDERIZADO OPTIMIZADO: Interpolación bilineal directa en la grilla original
+        const width = displayDimensions.width || PLAN_IMAGE_WIDTH;
+        const height = displayDimensions.height || PLAN_IMAGE_HEIGHT;
+
+        // ESCALADO DINÁMICO DE RESOLUCIÓN para mejorar rendimiento en pantallas grandes
+        // Calcular factor de escala basado en área total (reducir resolución si área > 500,000px)
+        const targetMaxPixels = 500000; // Límite para rendimiento óptimo
+        const currentPixels = width * height;
+        let scaleFactor = 1.0;
+
+        if (currentPixels > targetMaxPixels) {
+          scaleFactor = Math.max(
+            0.5,
+            Math.sqrt(targetMaxPixels / currentPixels),
+          );
+        }
+
+        const scaledWidth = Math.floor(width * scaleFactor);
+        const scaledHeight = Math.floor(height * scaleFactor);
+
+        // Crear canvas temporal para renderizado a resolución reducida
+        const tempCanvas = document.createElement("canvas");
+        tempCanvas.width = scaledWidth;
+        tempCanvas.height = scaledHeight;
+        const tempCtx = tempCanvas.getContext("2d");
+
+        // Crear ImageData del tamaño escalado para mejor rendimiento
+        const imageData = tempCtx.createImageData(scaledWidth, scaledHeight);
+        const data = imageData.data;
+
+        // Precalcular factores para convertir coordenadas de píxeles escaladas a la grilla
+        const xScale = (cols - 1) / (scaledWidth - 1);
+        const yScale = (rows - 1) / (scaledHeight - 1);
+
+        // Renderizar cada píxel con interpolación bilineal directa (a resolución escalada)
+        for (let y = 0; y < scaledHeight; y++) {
+          // Invertir eje Y para coincidir con sistema de coordenadas (0,0) inferior derecha
+          const invertedY = scaledHeight - 1 - y;
+
+          for (let x = 0; x < scaledWidth; x++) {
+            // Convertir coordenadas de píxeles escalados a coordenadas en la grilla
+            const gridX = x * xScale;
+            const gridY = invertedY * yScale;
+
+            // Índices de la celda en la grilla original
+            const col1 = Math.floor(gridX);
+            const col2 = Math.min(col1 + 1, cols - 1);
+            const row1 = Math.floor(gridY);
+            const row2 = Math.min(row1 + 1, rows - 1);
+
+            // Factores de interpolación
+            const tCol = gridX - col1;
+            const tRow = gridY - row1;
+
+            // Valores de los 4 puntos más cercanos en la grilla original
+            const v11 = fullZi[row1]?.[col1] || 0;
+            const v12 = fullZi[row1]?.[col2] || 0;
+            const v21 = fullZi[row2]?.[col1] || 0;
+            const v22 = fullZi[row2]?.[col2] || 0;
+
+            // Interpolación bilineal
+            const v1 = v11 * (1 - tCol) + v12 * tCol;
+            const v2 = v21 * (1 - tCol) + v22 * tCol;
+            const finalValue = v1 * (1 - tRow) + v2 * tRow;
+
+            // Normalizar valor usando min/max dinámicos basados en datos reales
+            const normalizedVal = (finalValue - minVal) / valueRange;
+
+            // Obtener color de la LUT
+            const lutIndex = Math.floor(normalizedVal * 255);
+            const idx = Math.max(0, Math.min(lutIndex, 255));
+            const color = colorLUT[idx];
+
+            // Acceso directo a componentes RGBA desde la LUT optimizada
+            const rgba = color; // color ya es array [R, G, B, A]
+            const pixelIdx = (y * scaledWidth + x) * 4;
+            data[pixelIdx] = rgba[0]; // R
+            data[pixelIdx + 1] = rgba[1]; // G
+            data[pixelIdx + 2] = rgba[2]; // B
+            data[pixelIdx + 3] = rgba[3]; // A
           }
         }
-      }
 
-      // Poner ImageData en el canvas temporal
-      tempCtx.putImageData(imageData, 0, 0);
+        // Aplicar ImageData al canvas temporal
+        tempCtx.putImageData(imageData, 0, 0);
 
-      // Aplicar un blur sutil adicional
-      tempCtx.filter = "blur(2px)";
-      tempCtx.globalAlpha = 1.0;
-      tempCtx.drawImage(tempCanvas, 0, 0);
-      tempCtx.filter = "none";
-      tempCtx.globalAlpha = 1.0;
+        // Dibujar el canvas temporal escalado al canvas principal
+        // Usar alta calidad de escalado (smooth) para mejor apariencia
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(
+          tempCanvas,
+          0,
+          0,
+          scaledWidth,
+          scaledHeight,
+          0,
+          0,
+          width,
+          height,
+        );
 
-      // Dibujar el canvas temporal escalado en el canvas principal
-      ctx.globalAlpha = opacity;
-      ctx.drawImage(
-        tempCanvas,
-        0,
-        0,
-        scaledWidth,
-        scaledHeight,
-        0,
-        0,
-        displayDimensions.width || PLAN_IMAGE_WIDTH,
-        displayDimensions.height || PLAN_IMAGE_HEIGHT,
-      );
-      ctx.globalAlpha = 1.0;
-
-      console.log(
-        `[${new Date().toISOString()}] HeatmapLayer - Mapa de calor completado`,
-        {
-          cubreTodoElPlano: true,
-          dimensiones: `${rows}x${cols}`,
-          esquemaColor: colorScheme,
-          opacidad: opacity,
-          potenciaIDW: idwPower,
-          timestamp: new Date().toISOString(),
-        },
-      );
+        console.log(
+          `[${new Date().toISOString()}] HeatmapLayer - Mapa de calor completado`,
+          {
+            cubreTodoElPlano: true,
+            dimensiones: `${rows}x${cols}`,
+            esquemaColor: colorScheme,
+            opacidad: opacity,
+            potenciaIDW: idwPower,
+            timestamp: new Date().toISOString(),
+            escalaDinamica: {
+              factor: scaleFactor,
+              resolucionOriginal: `${width}x${height}`,
+              resolucionRender: `${scaledWidth}x${scaledHeight}`,
+              pixelesOriginales: currentPixels,
+              pixelesRender: scaledWidth * scaledHeight,
+              optimizacion: `${((1 - scaleFactor) * 100).toFixed(1)}%`,
+            },
+          },
+        );
+      });
     }, [
       idwData,
       showHeatmap,
-      metersToPixels,
+      tilesToPixels,
       colorScheme,
       opacity,
       idwPower,
@@ -804,78 +781,94 @@ const HeatmapLayer = memo(
       valueRange,
     ]);
 
+    // Cleanup animation frame on unmount
+    useEffect(() => {
+      return () => {
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+        }
+      };
+    }, []);
+
     return (
       <canvas
         ref={canvasRef}
         width={displayDimensions.width || PLAN_IMAGE_WIDTH}
         height={displayDimensions.height || PLAN_IMAGE_HEIGHT}
-        className="absolute inset-0 pointer-events-none w-full h-auto"
+        className="absolute inset-0 pointer-events-none"
         style={{
           zIndex: 5,
-          width: "100%",
-          height: "auto",
-          maxWidth: `${PLAN_IMAGE_WIDTH}px`,
-          maxHeight: "70vh",
-          objectFit: "contain",
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: `${displayDimensions.width || PLAN_IMAGE_WIDTH}px`,
+          height: `${displayDimensions.height || PLAN_IMAGE_HEIGHT}px`,
         }}
       />
     );
   },
 );
 
-// Componente para cuadrícula
+// Componente para cuadrícula de baldosas
 const GridOverlay = ({
   showGrid,
   displayDimensions = { width: PLAN_IMAGE_WIDTH, height: PLAN_IMAGE_HEIGHT },
 }) => {
   if (!showGrid) return null;
 
-  const gridLines = [];
-  const cellSizeMeters = 1;
+  const tiles = [];
 
   // Usar dimensiones actuales de visualización
   const displayWidth = displayDimensions.width || PLAN_IMAGE_WIDTH;
   const displayHeight = displayDimensions.height || PLAN_IMAGE_HEIGHT;
-  const scaleX = displayWidth / PLAN_IMAGE_WIDTH;
-  const scaleY = displayHeight / PLAN_IMAGE_HEIGHT;
 
-  // Líneas verticales (cada 1 metro) - derecha a izquierda
-  for (let x = 0; x <= PLAN_WIDTH; x += cellSizeMeters) {
-    // X: 0-5m (derecha=0, izquierda=5) -> píxeles: derecha=displayWidth, izquierda=0
-    // Asegurar que x esté dentro del rango [0, 5] para evitar problemas de precisión
-    const clampedX = Math.max(0, Math.min(5, x));
-    const xPx = displayWidth - clampedX * (METERS_TO_PIXELS_X * scaleX);
-    gridLines.push(
-      <div
-        key={`v-${x}`}
-        className="absolute top-0 bottom-0 border-l border-white/30 border-dashed"
-        style={{ left: `${xPx}px` }}
-      />,
-    );
+  // Calcular tamaño de cada baldosa para cubrir exactamente el área disponible
+  const tileWidth = displayWidth / TILES_WIDTH;
+  const tileHeight = displayHeight / TILES_HEIGHT;
+
+  // Crear baldosas individuales
+  // Recorrer en coordenadas del plano (derecha a izquierda, abajo a arriba)
+  // Sistema de coordenadas: (0,0) = esquina inferior derecha
+  for (let tileY = 0; tileY < TILES_HEIGHT; tileY++) {
+    for (let tileX = 0; tileX < TILES_WIDTH; tileX++) {
+      // Coordenadas en baldosas: tileX=0 derecha, tileX=TILES_WIDTH-1 izquierda
+      // tileY=0 abajo, tileY=TILES_HEIGHT-1 arriba
+      const xBaldosas = TILES_WIDTH - 1 - tileX; // 0 derecha, TILES_WIDTH-1 izquierda
+      const yBaldosas = tileY; // 0 abajo, TILES_HEIGHT-1 arriba
+
+      // Convertir a píxeles: posición de la esquina superior izquierda de la baldosa
+      const leftPx = xBaldosas * tileWidth;
+      const topPx = (TILES_HEIGHT - 1 - yBaldosas) * tileHeight; // invertir Y
+
+      // Alternar colores para crear efecto de tablero
+      const isLightTile = (tileX + tileY) % 2 === 0;
+      const tileColor = isLightTile
+        ? "rgba(200, 200, 200, 0.15)"
+        : "rgba(150, 150, 150, 0.15)";
+
+      tiles.push(
+        <div
+          key={`tile-${tileX}-${tileY}`}
+          className="absolute border border-gray-400/20"
+          style={{
+            left: `${leftPx}px`,
+            top: `${topPx}px`,
+            width: `${tileWidth}px`,
+            height: `${tileHeight}px`,
+            backgroundColor: tileColor,
+          }}
+        />,
+      );
+    }
   }
 
-  // Líneas horizontales (cada 1 metro) - abajo a arriba
-  for (let y = 0; y <= PLAN_HEIGHT; y += cellSizeMeters) {
-    // Y: 0-14m (abajo=0, arriba=14) -> píxeles: abajo=displayHeight, arriba=0
-    // Asegurar que y esté dentro del rango [0, 14] para evitar problemas de precisión
-    const clampedY = Math.max(0, Math.min(14, y));
-    const yPx = displayHeight - clampedY * (METERS_TO_PIXELS_Y * scaleY);
-    gridLines.push(
-      <div
-        key={`h-${y}`}
-        className="absolute left-0 right-0 border-t border-white/30 border-dashed"
-        style={{ top: `${yPx}px` }}
-      />,
-    );
-  }
-
-  return <>{gridLines}</>;
+  return <>{tiles}</>;
 };
 
 const EpicenterZone = ({
   epicenter,
   showEpicenter,
-  metersToPixels,
+  tilesToPixels,
   displayDimensions = { width: PLAN_IMAGE_WIDTH, height: PLAN_IMAGE_HEIGHT },
 }) => {
   console.log("EpicenterZone - Props recibidas:", {
@@ -907,7 +900,7 @@ const EpicenterZone = ({
     top_sensors: epicenter.top_sensors,
   });
 
-  const center = metersToPixels(
+  const center = tilesToPixels(
     epicenter.zone_center_longitude,
     epicenter.zone_center_latitude,
   );
@@ -918,48 +911,47 @@ const EpicenterZone = ({
   const scaleX = displayWidth / PLAN_IMAGE_WIDTH;
   const scaleY = displayHeight / PLAN_IMAGE_HEIGHT;
 
-  const avgPixelsPerMeter =
-    (METERS_TO_PIXELS_X * scaleX + METERS_TO_PIXELS_Y * scaleY) / 2;
+  const avgPixelsPerTile =
+    (TILES_TO_PIXELS * scaleX + TILES_TO_PIXELS * scaleY) / 2;
 
-  // Limitar centro para que esté dentro del plano (0-5m, 0-14m)
+  // Limitar centro para que esté dentro del plano (0-57 baldosas, 0-66 baldosas)
   const centerX = Math.max(
     0,
-    Math.min(epicenter.zone_center_longitude, PLAN_WIDTH),
+    Math.min(epicenter.zone_center_longitude, PLAN_WIDTH_TILES),
   );
   const centerY = Math.max(
     0,
-    Math.min(epicenter.zone_center_latitude, PLAN_HEIGHT),
+    Math.min(epicenter.zone_center_latitude, PLAN_HEIGHT_TILES),
   );
 
   // Aplicar factor de escala al radio original antes de limitar
-  const scaledRadiusMeters = epicenter.zone_radius * 0.5; // Reducir a la mitad
+  const scaledRadiusTiles = epicenter.zone_radius * 0.5; // Reducir a la mitad
 
   // Limitar radio para que no exceda los bordes del plano
-  const maxRadiusX = Math.min(centerX, PLAN_WIDTH - centerX); // distancia a bordes horizontales
-  const maxRadiusY = Math.min(centerY, PLAN_HEIGHT - centerY); // distancia a bordes verticales
-  const maxRadiusMeters = Math.min(maxRadiusX, maxRadiusY);
-  const limitedRadiusMeters = Math.min(scaledRadiusMeters, maxRadiusMeters);
+  const maxRadiusX = Math.min(centerX, PLAN_WIDTH_TILES - centerX); // distancia a bordes horizontales
+  const maxRadiusY = Math.min(centerY, PLAN_HEIGHT_TILES - centerY); // distancia a bordes verticales
+  const maxRadiusTiles = Math.min(maxRadiusX, maxRadiusY);
+  const limitedRadiusTiles = Math.min(scaledRadiusTiles, maxRadiusTiles);
 
-  // Radio mínimo para que sea visible (0.5 metros)
-  const minRadiusMeters = 0.5;
-  const finalRadiusMeters = Math.max(minRadiusMeters, limitedRadiusMeters);
+  // Radio mínimo para que sea visible (0.5 baldosas = 0.15m)
+  const minRadiusTiles = 0.5;
+  const finalRadiusTiles = Math.max(minRadiusTiles, limitedRadiusTiles);
 
-  const radiusPixels = finalRadiusMeters * avgPixelsPerMeter;
+  const radiusPixels = finalRadiusTiles * avgPixelsPerTile;
 
   console.log("EpicenterZone - Cálculos de visualización:", {
-    METERS_TO_PIXELS_X,
-    METERS_TO_PIXELS_Y,
-    avgPixelsPerMeter,
+    TILES_TO_PIXELS,
+    avgPixelsPerTile,
     centerX,
     centerY,
-    zone_radius_meters: epicenter.zone_radius,
-    scaledRadiusMeters,
+    zone_radius_tiles: epicenter.zone_radius,
+    scaledRadiusTiles,
     maxRadiusX,
     maxRadiusY,
-    maxRadiusMeters,
-    limitedRadiusMeters,
-    minRadiusMeters: 0.5,
-    finalRadiusMeters,
+    maxRadiusTiles,
+    limitedRadiusTiles,
+    minRadiusTiles: 0.5,
+    finalRadiusTiles,
     radiusPixels,
     center_pixels: center,
   });
@@ -987,7 +979,7 @@ const EpicenterZone = ({
       {/* Líneas a sensores top */}
       {epicenter.top_sensors &&
         epicenter.top_sensors.map((sensor) => {
-          const sensorPos = metersToPixels(sensor.longitude, sensor.latitude);
+          const sensorPos = tilesToPixels(sensor.longitude, sensor.latitude);
           return (
             <div
               key={sensor.micro_id}
@@ -1025,16 +1017,13 @@ const FloorPlanMap = ({
   const [opacity, setOpacity] = useState(externalOpacity);
   const [idwPower, setIdwPower] = useState(externalIdwPower);
   const [heatmapStats, setHeatmapStats] = useState({ min: null, max: null });
-  const [imageDimensions, setImageDimensions] = useState({
-    width: PLAN_IMAGE_WIDTH,
-    height: PLAN_IMAGE_HEIGHT,
-  });
-  const [displayDimensions, setDisplayDimensions] = useState({
-    width: 0,
-    height: 0,
-  });
+  const [autoScale, setAutoScale] = useState(1);
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const containerRef = useRef(null);
-  const imageRef = useRef(null);
+  const mapContentRef = useRef(null);
 
   // Generar estilo de gradiente para la leyenda del mapa de calor
   const gradientStyle = useMemo(() => {
@@ -1052,102 +1041,50 @@ const FloorPlanMap = ({
     };
   }, [colorScheme, opacity]);
 
-  // Sincronizar props externos con estado interno
-  useEffect(() => {
-    setColorScheme(externalColorScheme);
-  }, [externalColorScheme]);
+  // Dimensiones base del plano (sin zoom, solo autoScale)
+  const baseWidth = useMemo(
+    () => Math.floor(PLAN_IMAGE_WIDTH * autoScale),
+    [autoScale],
+  );
+  const baseHeight = useMemo(
+    () => Math.floor(PLAN_IMAGE_HEIGHT * autoScale),
+    [autoScale],
+  );
 
-  useEffect(() => {
-    setOpacity(externalOpacity);
-  }, [externalOpacity]);
+  // Dimensiones escaladas con zoom
+  const scaledWidth = useMemo(
+    () => Math.floor(baseWidth * zoom),
+    [baseWidth, zoom],
+  );
+  const scaledHeight = useMemo(
+    () => Math.floor(baseHeight * zoom),
+    [baseHeight, zoom],
+  );
 
-  useEffect(() => {
-    setIdwPower(externalIdwPower);
-  }, [externalIdwPower]);
-
-  useEffect(() => {
-    setShowGrid(initialShowGrid);
-  }, [initialShowGrid]);
-
-  useEffect(() => {
-    setShowHeatmap(initialShowHeatmap);
-  }, [initialShowHeatmap]);
-
-  useEffect(() => {
-    setShowEpicenter(initialShowEpicenter);
-  }, [initialShowEpicenter]);
-
-  // Medir dimensiones de la imagen cuando se carga y cuando cambia el tamaño de ventana
-  useEffect(() => {
-    const updateDisplayDimensions = () => {
-      if (imageRef.current) {
-        const rect = imageRef.current.getBoundingClientRect();
-        setDisplayDimensions({
-          width: rect.width,
-          height: rect.height,
-        });
-      }
-    };
-
-    // Actualizar cuando la imagen se carga
-    const img = imageRef.current;
-    if (img) {
-      if (img.complete) {
-        updateDisplayDimensions();
-      } else {
-        img.addEventListener("load", updateDisplayDimensions);
-      }
-    }
-
-    // Actualizar en redimensionamiento de ventana
-    window.addEventListener("resize", updateDisplayDimensions);
-
-    return () => {
-      if (img) {
-        img.removeEventListener("load", updateDisplayDimensions);
-      }
-      window.removeEventListener("resize", updateDisplayDimensions);
-    };
-  }, []);
-
-  // No se calcula epicentro
-
-  // Convertir coordenadas en metros a píxeles
+  // Convertir coordenadas de baldosas a píxeles (sin zoom/pan, solo autoScale)
   // NOTA: El sistema de coordenadas tiene (0,0) en la esquina INFERIOR DERECHA
-  // X: 0-5 metros (derecha a izquierda) -> en píxeles: derecha a izquierda
-  // Y: 0-14 metros (abajo a arriba) -> en píxeles: abajo a arriba
-  const metersToPixels = (xMeters, yMeters, microId = null) => {
-    // Ajustar coordenadas para manejar errores de precisión de punto flotante
-    // JavaScript tiene problemas con 14.000000000000002 > 14
-    const adjustedXMeters = Math.max(0, Math.min(5, xMeters));
-    const adjustedYMeters = Math.max(0, Math.min(14, yMeters));
+  // X: 0-57 baldosas (derecha=0, izquierda=57) -> en píxeles: derecha a izquierda
+  // Y: 0-66 baldosas (abajo=0, arriba=66) -> en píxeles: abajo a arriba
+  const tilesToPixels = useCallback(
+    (xTiles, yTiles, microId = null) => {
+      // Ajustar coordenadas para manejar errores de precisión
+      const adjustedXTiles = Math.max(0, Math.min(PLAN_WIDTH_TILES, xTiles));
+      const adjustedYTiles = Math.max(0, Math.min(PLAN_HEIGHT_TILES, yTiles));
 
-    // Log para debug de coordenadas (solo si hay ajuste significativo)
-    if (
-      microId === null &&
-      (Math.abs(xMeters - adjustedXMeters) > 0.0001 ||
-        Math.abs(yMeters - adjustedYMeters) > 0.0001)
-    ) {
-      console.warn(
-        `⚠️ Coordenadas ajustadas en metersToPixels: x=${xMeters}->${adjustedXMeters}, y=${yMeters}->${adjustedYMeters}`,
-      );
-    }
+      // Píxeles por baldosa (escalado base)
+      const pixelsPerTile = TILES_TO_PIXELS * autoScale;
 
-    // Usar dimensiones actuales de la imagen para escalado
-    const displayWidth = displayDimensions.width || PLAN_IMAGE_WIDTH;
-    const displayHeight = displayDimensions.height || PLAN_IMAGE_HEIGHT;
-    const scaleX = displayWidth / PLAN_IMAGE_WIDTH;
-    const scaleY = displayHeight / PLAN_IMAGE_HEIGHT;
+      // Convertir baldosas a píxeles directamente usando la escala
+      // X: 0-57 baldosas -> píxeles: derecha=baseWidth, izquierda=0
+      const xPx = baseWidth - adjustedXTiles * pixelsPerTile;
 
-    // Convertir metros a píxeles
-    // X: 0-5m (derecha=0, izquierda=5) -> píxeles: derecha=displayWidth, izquierda=0
-    const xPx = displayWidth - adjustedXMeters * (METERS_TO_PIXELS_X * scaleX);
+      // Y: 0-66 baldosas -> píxeles: abajo=baseHeight, arriba=0
+      const yPx = baseHeight - adjustedYTiles * pixelsPerTile;
 
-    // Y: 0-14m (abajo=0, arriba=14) -> píxeles: abajo=displayHeight, arriba=0
-    const yPx = displayHeight - adjustedYMeters * (METERS_TO_PIXELS_Y * scaleY);
-
-    return { x: xPx, y: yPx };
-  };
+      return { x: xPx, y: yPx };
+    },
+    [autoScale, baseWidth, baseHeight],
+  );
 
   // Debug: verificar coordenadas de sensores
   useEffect(() => {
@@ -1185,7 +1122,7 @@ const FloorPlanMap = ({
           micro_id: s.micro_id,
           latitude: s.latitude,
           longitude: s.longitude,
-          pixels: metersToPixels(s.longitude, s.latitude),
+          pixels: tilesToPixels(s.longitude, s.latitude),
           value: s.value,
           received_time: new Date().toISOString(),
         })),
@@ -1195,7 +1132,32 @@ const FloorPlanMap = ({
         `[${new Date().toISOString()}] FloorPlanMap - sensorData vacío`,
       );
     }
-  }, [sensorData, idwData, showHeatmap]);
+  }, [sensorData, idwData, showHeatmap, tilesToPixels]);
+
+  // Sincronizar props externos con estado interno
+  useEffect(() => {
+    setColorScheme(externalColorScheme);
+  }, [externalColorScheme]);
+
+  useEffect(() => {
+    setOpacity(externalOpacity);
+  }, [externalOpacity]);
+
+  useEffect(() => {
+    setIdwPower(externalIdwPower);
+  }, [externalIdwPower]);
+
+  useEffect(() => {
+    setShowGrid(initialShowGrid);
+  }, [initialShowGrid]);
+
+  useEffect(() => {
+    setShowHeatmap(initialShowHeatmap);
+  }, [initialShowHeatmap]);
+
+  useEffect(() => {
+    setShowEpicenter(initialShowEpicenter);
+  }, [initialShowEpicenter]);
 
   // Calcular estadísticas del mapa de calor (mínimo y máximo)
   useEffect(() => {
@@ -1238,133 +1200,323 @@ const FloorPlanMap = ({
     }
   }, [idwData, showHeatmap]);
 
+  // Calcular escala automática basada en el contenedor
+  const getAutoScale = () => {
+    if (!containerRef.current) return 1;
+    const containerWidth = containerRef.current.clientWidth || 800;
+    const containerHeight = containerRef.current.clientHeight || 600;
+
+    // Dejar margen para controles y leyenda
+    const availableWidth = containerWidth - 180; // espacio para controles
+    const availableHeight = containerHeight - 100; // espacio para leyenda
+
+    const scaleX = availableWidth / PLAN_IMAGE_WIDTH;
+    const scaleY = availableHeight / PLAN_IMAGE_HEIGHT;
+
+    const scale = Math.max(0.8, Math.min(scaleX, scaleY)); // Permitir reducción a 0.8x para caber mejor
+    console.log(
+      `[${new Date().toISOString()}] FloorPlanMap - Calculando escala: scaleX=${scaleX.toFixed(2)}, scaleY=${scaleY.toFixed(2)}, escalaFinal=${scale.toFixed(2)}`,
+    );
+    return Math.min(scale, 2); // máximo 2x
+  };
+
+  // Calcular dimensiones del viewport disponible para el mapa (restando padding)
+  const getViewportDimensions = () => {
+    if (!containerRef.current) {
+      return { width: baseWidth, height: baseHeight };
+    }
+    const containerRect = containerRef.current.getBoundingClientRect();
+    // El contenedor interno tiene p-4 (16px de padding en todos lados)
+    const padding = 16;
+    const viewportWidth = Math.max(0, containerRect.width - padding * 2);
+    const viewportHeight = Math.max(0, containerRect.height - padding * 2);
+    return { width: viewportWidth, height: viewportHeight };
+  };
+
+  // Actualizar escala automáticamente cuando cambie el tamaño
+  useEffect(() => {
+    const updateScale = () => {
+      setAutoScale(getAutoScale());
+    };
+
+    updateScale();
+    window.addEventListener("resize", updateScale);
+    return () => window.removeEventListener("resize", updateScale);
+  }, []);
+
   return (
     <div className="relative" ref={containerRef}>
-      {/* Contenedor del plano */}
-      <div className="relative rounded-2xl shadow-lg bg-gray-800">
-        {/* Imagen del plano como fondo - MOSTRAR A TAMAÑO NATURAL */}
-        <div className="relative w-full flex items-center justify-center">
+      {/* Contenedor del plano con scroll */}
+      <div
+        className="relative rounded-2xl shadow-lg bg-gray-900 overflow-auto"
+        style={{ maxHeight: "70vh" }}
+      >
+        {/* Contenedor del mapa con scroll interno */}
+        <div
+          className="w-full h-full p-4 bg-gray-900"
+          style={{
+            minHeight: "400px",
+          }}
+        >
+          {/* Contenedor del mapa con zoom y pan */}
           <div
-            className="relative"
+            ref={mapContentRef}
+            className="relative mx-auto overflow-hidden bg-gray-900"
             style={{
-              width: "100%",
-              maxWidth: `${PLAN_IMAGE_WIDTH}px`,
+              width: `${baseWidth}px`,
+              height: `${baseHeight}px`,
+              maxWidth: `${baseWidth}px`,
+              maxHeight: `${baseHeight}px`,
+              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+              transformOrigin: "0 0",
+              cursor: isDragging ? "grabbing" : "grab",
+            }}
+            onMouseDown={(e) => {
+              if (e.button === 0) {
+                // Botón izquierdo
+                setIsDragging(true);
+                setDragStart({
+                  x: e.clientX - pan.x,
+                  y: e.clientY - pan.y,
+                });
+                e.currentTarget.style.cursor = "grabbing";
+              }
+            }}
+            onMouseMove={(e) => {
+              if (isDragging) {
+                // Calcular nuevo pan con límites
+                const newPanX = e.clientX - dragStart.x;
+                const newPanY = e.clientY - dragStart.y;
+
+                // Límites del pan: no permitir mover el mapa fuera de los bordes
+                const scaledWidth = baseWidth * zoom;
+                const scaledHeight = baseHeight * zoom;
+                const { width: viewportWidth, height: viewportHeight } =
+                  getViewportDimensions();
+
+                // Calcular límites basados en el tamaño del contenido escalado vs el viewport
+                const maxPanX = Math.max(0, scaledWidth - viewportWidth);
+                const maxPanY = Math.max(0, scaledHeight - viewportHeight);
+                const minPanX = Math.min(0, -maxPanX);
+                const minPanY = Math.min(0, -maxPanY);
+
+                setPan({
+                  x: Math.max(minPanX, Math.min(maxPanX, newPanX)),
+                  y: Math.max(minPanY, Math.min(maxPanY, newPanY)),
+                });
+              }
+            }}
+            onMouseUp={() => {
+              setIsDragging(false);
+              if (mapContentRef.current) {
+                mapContentRef.current.style.cursor = "grab";
+              }
+            }}
+            onMouseLeave={() => {
+              setIsDragging(false);
+              if (mapContentRef.current) {
+                mapContentRef.current.style.cursor = "grab";
+              }
+            }}
+            onWheel={(e) => {
+              e.preventDefault();
+              const rect = e.currentTarget.getBoundingClientRect();
+              const mouseX = e.clientX - rect.left;
+              const mouseY = e.clientY - rect.top;
+
+              const oldZoom = zoom;
+              const newZoom = Math.max(
+                0.5,
+                Math.min(5, zoom - e.deltaY * 0.001),
+              );
+
+              // Zoom centrado en el cursor del mouse
+              const scaleFactor = newZoom / oldZoom;
+              // Calcular el punto relativo al contenido transformado
+              // mouseX/Y son coordenadas de pantalla, pan es en píxeles de pantalla
+              const relativeX = (mouseX - pan.x) / oldZoom;
+              const relativeY = (mouseY - pan.y) / oldZoom;
+
+              // Nuevo pan para mantener el punto bajo el cursor
+              // Primero calcular donde estaría el punto con el nuevo zoom
+              const newX = relativeX * newZoom;
+              const newY = relativeY * newZoom;
+
+              // Ajustar pan para que mouseX/Y coincida con newX/Y
+              let newPanX = mouseX - newX;
+              let newPanY = mouseY - newY;
+
+              // Aplicar límites después del zoom
+              const scaledWidth = baseWidth * newZoom;
+              const scaledHeight = baseHeight * newZoom;
+              const { width: viewportWidth, height: viewportHeight } =
+                getViewportDimensions();
+
+              const maxPanX = Math.max(0, scaledWidth - viewportWidth);
+              const maxPanY = Math.max(0, scaledHeight - viewportHeight);
+              const minPanX = Math.min(0, -maxPanX);
+              const minPanY = Math.min(0, -maxPanY);
+
+              newPanX = Math.max(minPanX, Math.min(maxPanX, newPanX));
+              newPanY = Math.max(minPanY, Math.min(maxPanY, newPanY));
+
+              setZoom(newZoom);
+              setPan({ x: newPanX, y: newPanY });
             }}
           >
-            <img
-              ref={imageRef}
-              src="/plano.png"
-              alt="Plano interior"
-              className="w-full h-auto object-contain"
-              style={{ maxHeight: "70vh" }}
-              onLoad={(e) => {
-                const img = e.target;
-                setImageDimensions({
-                  width: img.naturalWidth,
-                  height: img.naturalHeight,
-                });
-                const rect = img.getBoundingClientRect();
-                setDisplayDimensions({
-                  width: rect.width,
-                  height: rect.height,
-                });
-              }}
-              onError={() => console.error("Error cargando plano.png")}
+            {/* Fondo de cuadrícula de baldosas */}
+            <GridOverlay
+              showGrid={showGrid}
+              displayDimensions={{ width: baseWidth, height: baseHeight }}
             />
 
-            {/* Contenedor para superposiciones (sensores, cuadrícula, mapa de calor) */}
-            <div className="absolute inset-0">
-              {/* Mapa de calor */}
-              <HeatmapLayer
-                idwData={showHeatmap ? idwData : null}
-                showHeatmap={showHeatmap}
-                metersToPixels={metersToPixels}
-                colorScheme={colorScheme}
-                opacity={opacity}
-                idwPower={idwPower}
-                displayDimensions={displayDimensions}
-              />
+            {/* Mapa de calor */}
+            <HeatmapLayer
+              idwData={showHeatmap ? idwData : null}
+              showHeatmap={showHeatmap}
+              tilesToPixels={tilesToPixels}
+              colorScheme={colorScheme}
+              opacity={opacity}
+              idwPower={idwPower}
+              displayDimensions={{ width: baseWidth, height: baseHeight }}
+            />
 
-              {/* Zona Epicentro */}
-              <EpicenterZone
-                epicenter={epicenter}
-                showEpicenter={showEpicenter}
-                metersToPixels={metersToPixels}
-                displayDimensions={displayDimensions}
-              />
+            {/* Zona Epicentro */}
+            <EpicenterZone
+              epicenter={epicenter}
+              showEpicenter={showEpicenter}
+              tilesToPixels={tilesToPixels}
+              displayDimensions={{ width: baseWidth, height: baseHeight }}
+            />
 
-              {/* Cuadrícula superpuesta */}
-              <div
-                className="absolute inset-0 pointer-events-none"
-                style={{ zIndex: 10 }}
-              >
-                <GridOverlay
-                  showGrid={showGrid}
-                  displayDimensions={displayDimensions}
+            {/* Sensores */}
+            {sensorData.map((sensor, index) => {
+              const { x, y } = tilesToPixels(
+                sensor.longitude,
+                sensor.latitude,
+                sensor.micro_id,
+              );
+
+              return (
+                <SensorMarker
+                  key={`${sensor.micro_id}-${index}`}
+                  x={x}
+                  y={y}
+                  value={sensor.value}
+                  micro_id={sensor.micro_id}
+                  location_name={sensor.location_name}
+                  last_update={sensor.last_update}
+                  mapContainerRef={containerRef}
+                  displayDimensions={{
+                    width: baseWidth,
+                    height: baseHeight,
+                  }}
                 />
+              );
+            })}
+          </div>
+          {/* Controles de zoom */}
+          <div className="absolute top-4 right-4 z-50 flex flex-col gap-2">
+            <div className="flex flex-col gap-2 p-2 bg-gray-800/80 backdrop-blur-sm rounded-lg border border-gray-700">
+              <div className="flex justify-center gap-2">
+                <button
+                  className="bg-gray-700 hover:bg-gray-600 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-colors"
+                  onClick={() => {
+                    const newZoom = Math.min(5, zoom * 1.2);
+                    // Centrar el zoom en el viewport
+                    const { width: viewportWidth, height: viewportHeight } =
+                      getViewportDimensions();
+                    const centerX = viewportWidth / 2;
+                    const centerY = viewportHeight / 2;
+
+                    const scaleFactor = newZoom / zoom;
+                    const relativeX = (centerX - pan.x) / zoom;
+                    const relativeY = (centerY - pan.y) / zoom;
+
+                    const newX = relativeX * newZoom;
+                    const newY = relativeY * newZoom;
+
+                    const newPanX = centerX - newX;
+                    const newPanY = centerY - newY;
+
+                    setZoom(newZoom);
+                    setPan({ x: newPanX, y: newPanY });
+                  }}
+                  title="Acercar (Ctrl + Scroll)"
+                >
+                  +
+                </button>
+                <button
+                  className="bg-gray-700 hover:bg-gray-600 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-colors"
+                  onClick={() => {
+                    const newZoom = Math.max(0.5, zoom / 1.2);
+                    // Centrar el zoom en el viewport
+                    const { width: viewportWidth, height: viewportHeight } =
+                      getViewportDimensions();
+                    const centerX = viewportWidth / 2;
+                    const centerY = viewportHeight / 2;
+
+                    const scaleFactor = newZoom / zoom;
+                    const relativeX = (centerX - pan.x) / zoom;
+                    const relativeY = (centerY - pan.y) / zoom;
+
+                    const newX = relativeX * newZoom;
+                    const newY = relativeY * newZoom;
+
+                    const newPanX = centerX - newX;
+                    const newPanY = centerY - newY;
+
+                    setZoom(newZoom);
+                    setPan({ x: newPanX, y: newPanY });
+                  }}
+                  title="Alejar (Ctrl + Scroll)"
+                >
+                  -
+                </button>
               </div>
+              <div className="flex justify-center gap-2">
+                <button
+                  className="bg-gray-700 hover:bg-gray-600 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-colors"
+                  onClick={() => {
+                    setZoom(1);
+                    setPan({ x: 0, y: 0 });
+                  }}
+                  title="Restablecer a 100%"
+                >
+                  ↻
+                </button>
+                <button
+                  className="bg-gray-700 hover:bg-gray-600 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-colors"
+                  onClick={() => {
+                    // Calcular zoom para que el mapa quepa completamente en el viewport
+                    const { width: viewportWidth, height: viewportHeight } =
+                      getViewportDimensions();
 
-              {/* Sensores */}
-              <div className="absolute inset-0" style={{ zIndex: 20 }}>
-                {sensorData.map((sensor, index) => {
-                  const { x, y } = metersToPixels(
-                    sensor.longitude,
-                    sensor.latitude,
-                    sensor.micro_id,
-                  );
+                    const scaleX = viewportWidth / baseWidth;
+                    const scaleY = viewportHeight / baseHeight;
+                    const fitZoom = Math.min(scaleX, scaleY, 2); // Máximo 2x para no perder calidad
 
-                  return (
-                    <SensorMarker
-                      key={`${sensor.micro_id}-${index}`}
-                      x={x}
-                      y={y}
-                      value={sensor.value}
-                      micro_id={sensor.micro_id}
-                      location_name={sensor.location_name}
-                      last_update={sensor.last_update}
-                      mapContainerRef={containerRef}
-                      displayDimensions={displayDimensions}
-                    />
-                  );
-                })}
+                    // Centrar el mapa en el viewport
+                    const scaledWidth = baseWidth * fitZoom;
+                    const scaledHeight = baseHeight * fitZoom;
+                    const newPanX = (viewportWidth - scaledWidth) / 2;
+                    const newPanY = (viewportHeight - scaledHeight) / 2;
 
-                {/* Marcadores de referencia para debugging con nuevo sistema de coordenadas */}
-                <div
-                  className="absolute w-2 h-2 bg-blue-500 rounded-full"
-                  style={{
-                    left: "100%",
-                    top: "100%",
-                    transform: "translate(-50%, -50%)",
+                    setZoom(fitZoom);
+                    setPan({ x: newPanX, y: newPanY });
                   }}
-                  title="Esquina inferior derecha (0,0)"
-                ></div>
-                <div
-                  className="absolute w-2 h-2 bg-blue-500 rounded-full"
-                  style={{
-                    left: "0%",
-                    top: "100%",
-                    transform: "translate(-50%, -50%)",
-                  }}
-                  title="Esquina inferior izquierda (5,0)"
-                ></div>
-                <div
-                  className="absolute w-2 h-2 bg-blue-500 rounded-full"
-                  style={{
-                    left: "100%",
-                    top: "0%",
-                    transform: "translate(-50%, -50%)",
-                  }}
-                  title="Esquina superior derecha (0,14)"
-                ></div>
-                <div
-                  className="absolute w-2 h-2 bg-blue-500 rounded-full"
-                  style={{
-                    left: "0%",
-                    top: "0%",
-                    transform: "translate(-50%, -50%)",
-                  }}
-                  title="Esquina superior izquierda (5,14)"
-                ></div>
+                  title="Ajustar a la vista"
+                >
+                  ⤢
+                </button>
+              </div>
+              <div className="text-xs text-gray-300 text-center mt-1 pt-2 border-t border-gray-700">
+                <div className="font-medium">
+                  Zoom: {(zoom * 100).toFixed(0)}%
+                </div>
+                <div className="text-gray-400 text-[10px] mt-1">
+                  Arrastre para mover • Rueda para zoom
+                </div>
               </div>
             </div>
           </div>

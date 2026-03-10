@@ -4,6 +4,13 @@ import FloorPlanMap from "../components/Map/FloorPlanMap";
 import { useWebSocket } from "../hooks/useWebSocket";
 import { testSensorData, testIdwData, testEpicenter } from "../utils/testData";
 
+// Configuración del plano (consistente con FloorPlanMap.jsx)
+const TILE_SIZE_METERS = 0.3; // 30 cm por baldosa
+const TILES_WIDTH = 57; // número de baldosas en X (ancho)
+const TILES_HEIGHT = 66; // número de baldosas en Y (alto)
+const PLAN_WIDTH_METERS = TILES_WIDTH * TILE_SIZE_METERS; // 17.1 metros
+const PLAN_HEIGHT_METERS = TILES_HEIGHT * TILE_SIZE_METERS; // 19.8 metros
+
 const RealTimePage = () => {
   const {
     connected,
@@ -330,7 +337,7 @@ const RealTimePage = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Mapa - ocupa 2/3 del espacio */}
         <div className="lg:col-span-2">
-          <div className="card p-4 overflow-visible">
+          <div className="card p-4 overflow-auto">
             <div className="p-2 sm:p-3 border-b border-primary-200">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-0">
                 <div className="flex items-center space-x-2">
@@ -343,13 +350,13 @@ const RealTimePage = () => {
                 </div>
                 <div className="flex items-center space-x-2 sm:space-x-3 text-xs">
                   <span className="text-primary-600">
-                    {sensorData.length} sensores • 5m × 14m
+                    {sensorData.length} sensores • 17.1m × 19.8m
                   </span>
                 </div>
               </div>
             </div>
 
-            <div className="relative flex justify-center">
+            <div className="relative min-h-[500px]">
               {connected ? (
                 <FloorPlanMap
                   sensorData={sensorData}
@@ -465,19 +472,24 @@ const RealTimePage = () => {
                 <div className="space-y-1 text-xs text-primary-600">
                   <div className="flex justify-between">
                     <span>Dimensiones:</span>
-                    <span className="font-medium">5m × 14m</span>
+                    <span className="font-medium">
+                      {PLAN_WIDTH_METERS.toFixed(1)}m ×{" "}
+                      {PLAN_HEIGHT_METERS.toFixed(1)}m
+                    </span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Cuadrícula:</span>
-                    <span className="font-medium">1m × 1m</span>
+                    <span>Baldosas:</span>
+                    <span className="font-medium">
+                      {TILES_WIDTH} × {TILES_HEIGHT}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span>Sensores activos:</span>
                     <span className="font-medium">{sensorData.length}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Escala:</span>
-                    <span className="font-medium">40.4 px/m</span>
+                    <span>Baldosa:</span>
+                    <span className="font-medium">30cm × 30cm</span>
                   </div>
                 </div>
               </div>
