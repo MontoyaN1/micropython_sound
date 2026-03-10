@@ -139,7 +139,7 @@ const SensorMarker = ({
   const scaleX = displayWidth / PLAN_IMAGE_WIDTH;
   const scaleY = displayHeight / PLAN_IMAGE_HEIGHT;
 
-  const tilesX = (displayWidth - x) / (TILES_TO_PIXELS * scaleX);
+  const tilesX = x / (TILES_TO_PIXELS * scaleX);
   const tilesY = (displayHeight - y) / (TILES_TO_PIXELS * scaleY);
 
   // Determinar la mejor posición para el tooltip basado en la posición del sensor
@@ -186,6 +186,42 @@ const SensorMarker = ({
     }
   }, [x, y, mapContainerRef]);
 
+  // Cerrar popup al tocar fuera en dispositivos móviles
+  useEffect(() => {
+    if (!showPopup) return;
+
+    const handleTouchOutside = (e) => {
+      // Cerrar si se toca fuera del sensor (incluye popup)
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setShowPopup(false);
+      }
+    };
+
+    const handleClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setShowPopup(false);
+      }
+    };
+
+    // Agregar event listeners para móviles y desktop
+    // Usar capture phase para asegurar que se ejecute primero
+    document.addEventListener("touchstart", handleTouchOutside, {
+      capture: true,
+    });
+    document.addEventListener("mousedown", handleClickOutside, {
+      capture: true,
+    });
+
+    return () => {
+      document.removeEventListener("touchstart", handleTouchOutside, {
+        capture: true,
+      });
+      document.removeEventListener("mousedown", handleClickOutside, {
+        capture: true,
+      });
+    };
+  }, [showPopup]);
+
   return (
     <div
       ref={containerRef}
@@ -198,10 +234,20 @@ const SensorMarker = ({
       }}
       onMouseEnter={() => setShowPopup(true)}
       onMouseLeave={() => setShowPopup(false)}
+      onTouchStart={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        // Toggle del popup en móviles: si ya está abierto, cerrarlo; si no, abrirlo
+        setShowPopup((prev) => !prev);
+      }}
+      onTouchEnd={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
     >
       {/* Punto del sensor */}
       <div
-        className={`relative w-10 h-10 rounded-full bg-white border-2 ${colorClasses.split(" ")[1]} flex items-center justify-center shadow-lg z-10`}
+        className={`relative w-10 h-10 rounded-full bg-white border-2 ${colorClasses.split(" ")[1]} flex items-center justify-center shadow-lg z-10 transition-transform duration-200 ${showPopup ? "scale-110" : ""}`}
       >
         {/* ID del sensor en el centro */}
         <div className={`text-xs font-bold ${colorClasses.split(" ")[2]}`}>
@@ -214,12 +260,15 @@ const SensorMarker = ({
         >
           {Math.round(value)}
         </div>
+
+        {/* Indicador táctil para móviles (solo visible en móviles) */}
+        <div className="sm:hidden absolute -bottom-1 -left-1 w-4 h-4 rounded-full bg-blue-500 opacity-75 animate-pulse"></div>
       </div>
 
       {/* Popup detallado (hover) - posición dinámica */}
       {showPopup && (
         <div
-          className={`absolute w-64 bg-white rounded-lg shadow-xl p-4 z-[100] border border-gray-200 ${
+          className={`absolute w-64 sm:w-72 bg-white rounded-lg shadow-xl p-4 z-[100] border border-gray-200 ${
             tooltipPosition === "top"
               ? "left-1/2 transform -translate-x-1/2 bottom-full mb-12"
               : tooltipPosition === "bottom"
@@ -228,7 +277,25 @@ const SensorMarker = ({
                   ? "top-1/2 transform -translate-y-1/2 left-full ml-12"
                   : "top-1/2 transform -translate-y-1/2 right-full mr-12"
           }`}
+          onTouchStart={(e) => {
+            e.stopPropagation();
+          }}
         >
+          {/* Botón de cerrar para móviles */}
+          <div className="sm:hidden absolute top-2 right-2 z-10">
+            <button
+              className="w-6 h-6 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-gray-700"
+              onClick={() => setShowPopup(false)}
+              onTouchStart={(e) => {
+                e.stopPropagation();
+                setShowPopup(false);
+              }}
+              aria-label="Cerrar"
+            >
+              ×
+            </button>
+          </div>
+
           <div className="space-y-2">
             <div className="font-bold text-lg flex items-center justify-between">
               <span>{micro_id}</span>
@@ -680,13 +747,13 @@ const HeatmapLayer = memo(
 
         // Renderizar cada píxel con interpolación bilineal directa (a resolución escalada)
         for (let y = 0; y < scaledHeight; y++) {
-          // Invertir eje Y para coincidir con sistema de coordenadas (0,0) inferior derecha
+          // Invertir eje Y para coincidir con sistema de coordenadas (0,0) inferior izquierda
           const invertedY = scaledHeight - 1 - y;
+          const gridY = invertedY * yScale;
 
           for (let x = 0; x < scaledWidth; x++) {
             // Convertir coordenadas de píxeles escalados a coordenadas en la grilla
             const gridX = x * xScale;
-            const gridY = invertedY * yScale;
 
             // Índices de la celda en la grilla original
             const col1 = Math.floor(gridX);
@@ -827,18 +894,18 @@ const GridOverlay = ({
   const tileHeight = displayHeight / TILES_HEIGHT;
 
   // Crear baldosas individuales
-  // Recorrer en coordenadas del plano (derecha a izquierda, abajo a arriba)
-  // Sistema de coordenadas: (0,0) = esquina inferior derecha
+  // Recorrer en coordenadas del plano (izquierda a derecha, abajo a arriba)
+  // Sistema de coordenadas: (0,0) = esquina inferior izquierda
   for (let tileY = 0; tileY < TILES_HEIGHT; tileY++) {
     for (let tileX = 0; tileX < TILES_WIDTH; tileX++) {
-      // Coordenadas en baldosas: tileX=0 derecha, tileX=TILES_WIDTH-1 izquierda
+      // Coordenadas en baldosas: tileX=0 izquierda, tileX=TILES_WIDTH-1 derecha
       // tileY=0 abajo, tileY=TILES_HEIGHT-1 arriba
-      const xBaldosas = TILES_WIDTH - 1 - tileX; // 0 derecha, TILES_WIDTH-1 izquierda
-      const yBaldosas = tileY; // 0 abajo, TILES_HEIGHT-1 arriba
+      const xBaldosas = tileX; // 0 izquierda, TILES_WIDTH-1 derecha
+      const yBaldosas = TILES_HEIGHT - 1 - tileY; // 0 abajo, TILES_HEIGHT-1 arriba
 
       // Convertir a píxeles: posición de la esquina superior izquierda de la baldosa
       const leftPx = xBaldosas * tileWidth;
-      const topPx = (TILES_HEIGHT - 1 - yBaldosas) * tileHeight; // invertir Y
+      const topPx = yBaldosas * tileHeight;
 
       // Alternar colores para crear efecto de tablero
       const isLightTile = (tileX + tileY) % 2 === 0;
@@ -1022,6 +1089,11 @@ const FloorPlanMap = ({
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [touchStart, setTouchStart] = useState(null);
+  const [touchDistance, setTouchDistance] = useState(0);
+  const [lastTapTime, setLastTapTime] = useState(0);
+  const [lastTapPosition, setLastTapPosition] = useState({ x: 0, y: 0 });
+  const [lastPinchTime, setLastPinchTime] = useState(0);
   const containerRef = useRef(null);
   const mapContentRef = useRef(null);
 
@@ -1061,9 +1133,38 @@ const FloorPlanMap = ({
     [baseHeight, zoom],
   );
 
+  // Efecto de depuración para dimensiones
+  useEffect(() => {
+    console.log(`[${new Date().toISOString()}] FloorPlanMap - Dimensiones:`, {
+      autoScale: autoScale.toFixed(3),
+      baseWidth,
+      baseHeight,
+      zoom: zoom.toFixed(3),
+      scaledWidth,
+      scaledHeight,
+      panX: pan.x.toFixed(1),
+      panY: pan.y.toFixed(1),
+      containerSize: containerRef.current
+        ? {
+            width: containerRef.current.clientWidth,
+            height: containerRef.current.clientHeight,
+          }
+        : "no container",
+    });
+  }, [
+    autoScale,
+    baseWidth,
+    baseHeight,
+    zoom,
+    scaledWidth,
+    scaledHeight,
+    pan.x,
+    pan.y,
+  ]);
+
   // Convertir coordenadas de baldosas a píxeles (sin zoom/pan, solo autoScale)
-  // NOTA: El sistema de coordenadas tiene (0,0) en la esquina INFERIOR DERECHA
-  // X: 0-57 baldosas (derecha=0, izquierda=57) -> en píxeles: derecha a izquierda
+  // NOTA: El sistema de coordenadas tiene (0,0) en la esquina INFERIOR IZQUIERDA
+  // X: 0-57 baldosas (izquierda=0, derecha=57) -> en píxeles: izquierda a derecha
   // Y: 0-66 baldosas (abajo=0, arriba=66) -> en píxeles: abajo a arriba
   const tilesToPixels = useCallback(
     (xTiles, yTiles, microId = null) => {
@@ -1075,8 +1176,8 @@ const FloorPlanMap = ({
       const pixelsPerTile = TILES_TO_PIXELS * autoScale;
 
       // Convertir baldosas a píxeles directamente usando la escala
-      // X: 0-57 baldosas -> píxeles: derecha=baseWidth, izquierda=0
-      const xPx = baseWidth - adjustedXTiles * pixelsPerTile;
+      // X: 0-57 baldosas -> píxeles: izquierda=0, derecha=baseWidth
+      const xPx = adjustedXTiles * pixelsPerTile;
 
       // Y: 0-66 baldosas -> píxeles: abajo=baseHeight, arriba=0
       const yPx = baseHeight - adjustedYTiles * pixelsPerTile;
@@ -1206,18 +1307,21 @@ const FloorPlanMap = ({
     const containerWidth = containerRef.current.clientWidth || 800;
     const containerHeight = containerRef.current.clientHeight || 600;
 
-    // Dejar margen para controles y leyenda
-    const availableWidth = containerWidth - 180; // espacio para controles
-    const availableHeight = containerHeight - 100; // espacio para leyenda
+    // Calcular escalas para que el mapa quepa completamente
+    const scaleX = containerWidth / PLAN_IMAGE_WIDTH;
+    const scaleY = containerHeight / PLAN_IMAGE_HEIGHT;
 
-    const scaleX = availableWidth / PLAN_IMAGE_WIDTH;
-    const scaleY = availableHeight / PLAN_IMAGE_HEIGHT;
+    // Usar la escala más pequeña para que el mapa quepa completamente en ambas dimensiones
+    const scale = Math.min(scaleX, scaleY); // Escala necesaria para que quepa (puede ser menor que 1 en móviles)
 
-    const scale = Math.max(0.8, Math.min(scaleX, scaleY)); // Permitir reducción a 0.8x para caber mejor
+    // Asegurar un mínimo razonable pero permitir que se reduzca lo necesario para caber en móviles
+    // En móviles, permitir escalas más pequeñas para que el mapa sea completamente visible
+    const finalScale = Math.max(0.15, scale); // Permitir reducción hasta 0.15x si es necesario para móviles pequeños
+
     console.log(
-      `[${new Date().toISOString()}] FloorPlanMap - Calculando escala: scaleX=${scaleX.toFixed(2)}, scaleY=${scaleY.toFixed(2)}, escalaFinal=${scale.toFixed(2)}`,
+      `[${new Date().toISOString()}] FloorPlanMap - Calculando escala: container=${containerWidth}x${containerHeight}, PLAN_IMAGE=${PLAN_IMAGE_WIDTH}x${PLAN_IMAGE_HEIGHT}, scaleX=${scaleX.toFixed(2)}, scaleY=${scaleY.toFixed(2)}, escalaFinal=${finalScale.toFixed(2)}`,
     );
-    return Math.min(scale, 2); // máximo 2x
+    return finalScale;
   };
 
   // Calcular dimensiones del viewport disponible para el mapa (restando padding)
@@ -1226,17 +1330,20 @@ const FloorPlanMap = ({
       return { width: baseWidth, height: baseHeight };
     }
     const containerRect = containerRef.current.getBoundingClientRect();
-    // El contenedor interno tiene p-4 (16px de padding en todos lados)
-    const padding = 16;
-    const viewportWidth = Math.max(0, containerRect.width - padding * 2);
-    const viewportHeight = Math.max(0, containerRect.height - padding * 2);
+    // Usar todo el espacio del contenedor
+    const viewportWidth = Math.max(0, containerRect.width);
+    const viewportHeight = Math.max(0, containerRect.height);
     return { width: viewportWidth, height: viewportHeight };
   };
 
   // Actualizar escala automáticamente cuando cambie el tamaño
   useEffect(() => {
     const updateScale = () => {
-      setAutoScale(getAutoScale());
+      const newScale = getAutoScale();
+      console.log(
+        `[${new Date().toISOString()}] FloorPlanMap - Actualizando escala a: ${newScale.toFixed(3)}`,
+      );
+      setAutoScale(newScale);
     };
 
     updateScale();
@@ -1244,34 +1351,66 @@ const FloorPlanMap = ({
     return () => window.removeEventListener("resize", updateScale);
   }, []);
 
+  // Event listener específico en el elemento del mapa para prevenir scroll de página
+  useEffect(() => {
+    const element = mapContentRef.current;
+    if (!element) return;
+
+    const handleWheel = (e) => {
+      // Solo prevenir el scroll cuando el evento ocurre en este elemento
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      return false;
+    };
+
+    // Agregar event listeners al elemento específico con passive: false
+    const options = { passive: false };
+    element.addEventListener("wheel", handleWheel, options);
+    element.addEventListener("mousewheel", handleWheel, options); // Para navegadores antiguos
+    element.addEventListener("DOMMouseScroll", handleWheel, options); // Para Firefox
+
+    return () => {
+      element.removeEventListener("wheel", handleWheel, options);
+      element.removeEventListener("mousewheel", handleWheel, options);
+      element.removeEventListener("DOMMouseScroll", handleWheel, options);
+    };
+  }, []);
+
   return (
-    <div className="relative" ref={containerRef}>
-      {/* Contenedor del plano con scroll */}
+    <div className="relative h-full w-full" ref={containerRef}>
+      {/* Contenedor del plano sin scroll */}
       <div
-        className="relative rounded-2xl shadow-lg bg-gray-900 overflow-auto"
-        style={{ maxHeight: "70vh" }}
+        className="relative rounded-2xl shadow-lg bg-gray-900 h-full w-full flex flex-col"
+        style={{ overscrollBehavior: "none" }}
       >
-        {/* Contenedor del mapa con scroll interno */}
-        <div
-          className="w-full h-full p-4 bg-gray-900"
-          style={{
-            minHeight: "400px",
-          }}
-        >
+        {/* Contenedor del mapa interno - permitir scroll si es necesario en móviles */}
+        <div className="w-full h-full p-0 bg-gray-900 overflow-hidden">
           {/* Contenedor del mapa con zoom y pan */}
           <div
             ref={mapContentRef}
-            className="relative mx-auto overflow-hidden bg-gray-900"
+            className="relative bg-gray-900"
+            tabIndex="0"
+            data-map-interaction="true"
             style={{
               width: `${baseWidth}px`,
               height: `${baseHeight}px`,
-              maxWidth: `${baseWidth}px`,
-              maxHeight: `${baseHeight}px`,
+              minWidth: `${baseWidth}px`,
+              minHeight: `${baseHeight}px`,
+
               transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
               transformOrigin: "0 0",
               cursor: isDragging ? "grabbing" : "grab",
+              touchAction: "none", // Prevenir scroll nativo en dispositivos táctiles
+              userSelect: "none", // Prevenir selección de texto al arrastrar
+              WebkitUserSelect: "none", // Para Safari
+              MozUserSelect: "none", // Para Firefox
+              willChange: "transform", // Mejorar rendimiento de animaciones
+              outline: "none", // Eliminar outline visual al tener foco
             }}
             onMouseDown={(e) => {
+              // Dar foco inmediatamente al hacer clic
+              e.currentTarget.focus();
               if (e.button === 0) {
                 // Botón izquierdo
                 setIsDragging(true);
@@ -1295,10 +1434,17 @@ const FloorPlanMap = ({
                   getViewportDimensions();
 
                 // Calcular límites basados en el tamaño del contenido escalado vs el viewport
+                // Si el contenido escalado es más pequeño que el viewport, permitir centrado
                 const maxPanX = Math.max(0, scaledWidth - viewportWidth);
                 const maxPanY = Math.max(0, scaledHeight - viewportHeight);
-                const minPanX = Math.min(0, -maxPanX);
-                const minPanY = Math.min(0, -maxPanY);
+                const minPanX =
+                  scaledWidth <= viewportWidth
+                    ? (viewportWidth - scaledWidth) / 2
+                    : -maxPanX;
+                const minPanY =
+                  scaledHeight <= viewportHeight
+                    ? (viewportHeight - scaledHeight) / 2
+                    : -maxPanY;
 
                 setPan({
                   x: Math.max(minPanX, Math.min(maxPanX, newPanX)),
@@ -1318,17 +1464,245 @@ const FloorPlanMap = ({
                 mapContentRef.current.style.cursor = "grab";
               }
             }}
-            onWheel={(e) => {
+            // Eventos táctiles para dispositivos móviles
+            onTouchStart={(e) => {
               e.preventDefault();
+              if (e.touches.length === 1) {
+                // Un dedo: inicio de arrastre o posible doble tap
+                const touch = e.touches[0];
+
+                // Verificar doble tap primero
+                const currentTime = Date.now();
+                const tapLength = currentTime - lastTapTime;
+                if (
+                  tapLength < 300 && // menos de 300ms entre taps
+                  Math.abs(touch.clientX - lastTapPosition.x) < 30 && // menos de 30px de diferencia en X
+                  Math.abs(touch.clientY - lastTapPosition.y) < 30 // menos de 30px de diferencia en Y
+                ) {
+                  // Doble tap: zoom in 1.5x centrado en la posición del tap
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const tapX = touch.clientX - rect.left;
+                  const tapY = touch.clientY - rect.top;
+
+                  const newZoom = Math.min(5, zoom * 1.5);
+                  const oldZoom = zoom;
+                  const scaleFactor = newZoom / oldZoom;
+                  const relativeX = (tapX - pan.x) / oldZoom;
+                  const relativeY = (tapY - pan.y) / oldZoom;
+
+                  const newX = relativeX * newZoom;
+                  const newY = relativeY * newZoom;
+
+                  let newPanX = tapX - newX;
+                  let newPanY = tapY - newY;
+
+                  // Aplicar límites después del zoom
+                  const scaledWidth = baseWidth * newZoom;
+                  const scaledHeight = baseHeight * newZoom;
+                  const { width: viewportWidth, height: viewportHeight } =
+                    getViewportDimensions();
+
+                  const maxPanX = Math.max(0, scaledWidth - viewportWidth);
+                  const maxPanY = Math.max(0, scaledHeight - viewportHeight);
+                  const minPanX =
+                    scaledWidth < viewportWidth
+                      ? (viewportWidth - scaledWidth) / 2
+                      : Math.min(0, -maxPanX);
+                  const minPanY =
+                    scaledHeight < viewportHeight
+                      ? (viewportHeight - scaledHeight) / 2
+                      : Math.min(0, -maxPanY);
+
+                  newPanX = Math.max(minPanX, Math.min(maxPanX, newPanX));
+                  newPanY = Math.max(minPanY, Math.min(maxPanY, newPanY));
+
+                  setZoom(newZoom);
+                  setPan({ x: newPanX, y: newPanY });
+
+                  // Resetear temporizador de doble tap
+                  setLastTapTime(0);
+                  setLastTapPosition({ x: 0, y: 0 });
+                  return;
+                }
+
+                // No es doble tap, iniciar arrastre normal
+                setIsDragging(true);
+                setDragStart({
+                  x: touch.clientX - pan.x,
+                  y: touch.clientY - pan.y,
+                });
+
+                // Guardar posición para posible doble tap futuro
+                setLastTapPosition({ x: touch.clientX, y: touch.clientY });
+              } else if (e.touches.length === 2) {
+                // Dos dedos: pinch zoom - inicializar con estado mejorado
+                const touch1 = e.touches[0];
+                const touch2 = e.touches[1];
+                const distance = Math.sqrt(
+                  Math.pow(touch2.clientX - touch1.clientX, 2) +
+                    Math.pow(touch2.clientY - touch1.clientY, 2),
+                );
+
+                // Calcular punto medio para centrar el zoom
+                const midX = (touch1.clientX + touch2.clientX) / 2;
+                const midY = (touch1.clientY + touch2.clientY) / 2;
+
+                // Guardar estado inicial para pinch zoom
+                setTouchStart({
+                  x: midX,
+                  y: midY,
+                  time: Date.now(),
+                  initialZoom: zoom,
+                  initialDistance: distance,
+                  lastDistance: distance,
+                  lastTime: Date.now(),
+                });
+                setTouchDistance(distance);
+              }
+            }}
+            onTouchMove={(e) => {
+              e.preventDefault();
+              if (e.touches.length === 1 && isDragging) {
+                // Arrastre con un dedo
+                const touch = e.touches[0];
+                const newPanX = touch.clientX - dragStart.x;
+                const newPanY = touch.clientY - dragStart.y;
+
+                // Límites del pan
+                const scaledWidth = baseWidth * zoom;
+                const scaledHeight = baseHeight * zoom;
+                const { width: viewportWidth, height: viewportHeight } =
+                  getViewportDimensions();
+
+                const maxPanX = Math.max(0, scaledWidth - viewportWidth);
+                const maxPanY = Math.max(0, scaledHeight - viewportHeight);
+                const minPanX =
+                  scaledWidth <= viewportWidth
+                    ? (viewportWidth - scaledWidth) / 2
+                    : -maxPanX;
+                const minPanY =
+                  scaledHeight <= viewportHeight
+                    ? (viewportHeight - scaledHeight) / 2
+                    : -maxPanY;
+
+                setPan({
+                  x: Math.max(minPanX, Math.min(maxPanX, newPanX)),
+                  y: Math.max(minPanY, Math.min(maxPanY, newPanY)),
+                });
+              } else if (e.touches.length === 2 && touchStart) {
+                // Pinch zoom con dos dedos - lógica mejorada y suavizada
+                const touch1 = e.touches[0];
+                const touch2 = e.touches[1];
+                const currentDistance = Math.sqrt(
+                  Math.pow(touch2.clientX - touch1.clientX, 2) +
+                    Math.pow(touch2.clientY - touch1.clientY, 2),
+                );
+                const currentTime = Date.now();
+
+                // Calcular punto medio para centrar el zoom
+                const rect = e.currentTarget.getBoundingClientRect();
+                const midX = (touch1.clientX + touch2.clientX) / 2;
+                const midY = (touch1.clientY + touch2.clientY) / 2;
+                const mouseX = midX - rect.left;
+                const mouseY = midY - rect.top;
+
+                // Calcular cambio de escala basado en la distancia inicial
+                const scaleChange =
+                  currentDistance / touchStart.initialDistance;
+
+                // Aplicar suavizado al cambio de escala
+                const smoothedScaleChange = Math.max(
+                  0.5,
+                  Math.min(2.0, scaleChange),
+                );
+                const newZoom = Math.max(
+                  0.5,
+                  Math.min(5, touchStart.initialZoom * smoothedScaleChange),
+                );
+
+                // Calcular nuevo pan centrado en el punto medio
+                const oldZoom = zoom;
+                const scaleFactor = newZoom / oldZoom;
+                const relativeX = (mouseX - pan.x) / oldZoom;
+                const relativeY = (mouseY - pan.y) / oldZoom;
+
+                const newX = relativeX * newZoom;
+                const newY = relativeY * newZoom;
+
+                let newPanX = mouseX - newX;
+                let newPanY = mouseY - newY;
+
+                // Aplicar límites después del zoom
+                const scaledWidth = baseWidth * newZoom;
+                const scaledHeight = baseHeight * newZoom;
+                const { width: viewportWidth, height: viewportHeight } =
+                  getViewportDimensions();
+
+                const maxPanX = Math.max(0, scaledWidth - viewportWidth);
+                const maxPanY = Math.max(0, scaledHeight - viewportHeight);
+                const minPanX =
+                  scaledWidth <= viewportWidth
+                    ? (viewportWidth - scaledWidth) / 2
+                    : -maxPanX;
+                const minPanY =
+                  scaledHeight <= viewportHeight
+                    ? (viewportHeight - scaledHeight) / 2
+                    : -maxPanY;
+
+                newPanX = Math.max(minPanX, Math.min(maxPanX, newPanX));
+                newPanY = Math.max(minPanY, Math.min(maxPanY, newPanY));
+
+                setZoom(newZoom);
+                setPan({ x: newPanX, y: newPanY });
+
+                // Actualizar estado para el siguiente frame
+                setTouchStart({
+                  ...touchStart,
+                  lastDistance: currentDistance,
+                  lastTime: currentTime,
+                });
+              }
+            }}
+            onTouchEnd={(e) => {
+              e.preventDefault();
+
+              // Si fue un solo tap (no arrastre), actualizar tiempo para doble tap
+              if (e.touches.length === 0 && touchStart && !isDragging) {
+                const currentTime = Date.now();
+                const tapLength = currentTime - touchStart.time;
+
+                // Solo considerar como tap si fue breve (< 300ms)
+                if (tapLength < 300) {
+                  setLastTapTime(currentTime);
+                }
+              }
+
+              setIsDragging(false);
+              setTouchStart(null);
+              setTouchDistance(0);
+              setLastPinchTime(Date.now());
+            }}
+            onTouchCancel={(e) => {
+              e.preventDefault();
+              setIsDragging(false);
+              setTouchStart(null);
+              setTouchDistance(0);
+              setLastPinchTime(Date.now());
+            }}
+            onWheel={(e) => {
+              // El event listener nativo ya previene el scroll de la página
+              // Solo procesar el zoom
+
               const rect = e.currentTarget.getBoundingClientRect();
               const mouseX = e.clientX - rect.left;
               const mouseY = e.clientY - rect.top;
 
               const oldZoom = zoom;
-              const newZoom = Math.max(
-                0.5,
-                Math.min(5, zoom - e.deltaY * 0.001),
-              );
+              // Usar deltaMode para manejar diferentes tipos de ruedas
+              const delta = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+              // Invertir dirección: scroll hacia arriba = zoom in, scroll hacia abajo = zoom out
+              const zoomChange = -delta * 0.001;
+              const newZoom = Math.max(0.5, Math.min(5, zoom + zoomChange));
 
               // Zoom centrado en el cursor del mouse
               const scaleFactor = newZoom / oldZoom;
@@ -1354,14 +1728,47 @@ const FloorPlanMap = ({
 
               const maxPanX = Math.max(0, scaledWidth - viewportWidth);
               const maxPanY = Math.max(0, scaledHeight - viewportHeight);
-              const minPanX = Math.min(0, -maxPanX);
-              const minPanY = Math.min(0, -maxPanY);
+              const minPanX =
+                scaledWidth <= viewportWidth
+                  ? (viewportWidth - scaledWidth) / 2
+                  : -maxPanX;
+              const minPanY =
+                scaledHeight <= viewportHeight
+                  ? (viewportHeight - scaledHeight) / 2
+                  : -maxPanY;
 
               newPanX = Math.max(minPanX, Math.min(maxPanX, newPanX));
               newPanY = Math.max(minPanY, Math.min(maxPanY, newPanY));
 
               setZoom(newZoom);
               setPan({ x: newPanX, y: newPanY });
+            }}
+            onWheelCapture={(e) => {
+              // El event listener nativo ya previene el scroll de la página
+              // No es necesario hacer nada adicional aquí
+            }}
+            onKeyDown={(e) => {
+              // Prevenir comportamiento por defecto de teclas que podrían causar scroll
+              if (
+                [
+                  " ",
+                  "ArrowUp",
+                  "ArrowDown",
+                  "ArrowLeft",
+                  "ArrowRight",
+                  "PageUp",
+                  "PageDown",
+                  "Home",
+                  "End",
+                ].includes(e.key)
+              ) {
+                e.preventDefault();
+                e.stopPropagation();
+              }
+            }}
+            onMouseEnter={(e) => {
+              // Dar foco automáticamente cuando el mouse entra al área del mapa
+              e.currentTarget.focus();
             }}
           >
             {/* Fondo de cuadrícula de baldosas */}
@@ -1415,12 +1822,12 @@ const FloorPlanMap = ({
               );
             })}
           </div>
-          {/* Controles de zoom */}
-          <div className="absolute top-4 right-4 z-50 flex flex-col gap-2">
-            <div className="flex flex-col gap-2 p-2 bg-gray-800/80 backdrop-blur-sm rounded-lg border border-gray-700">
-              <div className="flex justify-center gap-2">
+          {/* Controles de zoom compactos - posición superior derecha */}
+          <div className="absolute top-2 right-2 z-50">
+            <div className="flex flex-col gap-1 p-1.5 bg-gray-900/90 backdrop-blur-sm rounded-lg border border-gray-700/70 shadow-xl">
+              <div className="flex gap-1">
                 <button
-                  className="bg-gray-700 hover:bg-gray-600 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-colors"
+                  className="bg-gray-800/80 hover:bg-gray-700 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-md transition-colors text-sm"
                   onClick={() => {
                     const newZoom = Math.min(5, zoom * 1.2);
                     // Centrar el zoom en el viewport
@@ -1447,7 +1854,7 @@ const FloorPlanMap = ({
                   +
                 </button>
                 <button
-                  className="bg-gray-700 hover:bg-gray-600 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-colors"
+                  className="bg-gray-800/80 hover:bg-gray-700 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-md transition-colors text-sm"
                   onClick={() => {
                     const newZoom = Math.max(0.5, zoom / 1.2);
                     // Centrar el zoom en el viewport
@@ -1474,9 +1881,9 @@ const FloorPlanMap = ({
                   -
                 </button>
               </div>
-              <div className="flex justify-center gap-2">
+              <div className="flex gap-1">
                 <button
-                  className="bg-gray-700 hover:bg-gray-600 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-colors"
+                  className="bg-gray-800/80 hover:bg-gray-700 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-md transition-colors text-sm"
                   onClick={() => {
                     setZoom(1);
                     setPan({ x: 0, y: 0 });
@@ -1486,7 +1893,7 @@ const FloorPlanMap = ({
                   ↻
                 </button>
                 <button
-                  className="bg-gray-700 hover:bg-gray-600 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-colors"
+                  className="bg-gray-800/80 hover:bg-gray-700 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-md transition-colors text-sm"
                   onClick={() => {
                     // Calcular zoom para que el mapa quepa completamente en el viewport
                     const { width: viewportWidth, height: viewportHeight } =
@@ -1510,13 +1917,8 @@ const FloorPlanMap = ({
                   ⤢
                 </button>
               </div>
-              <div className="text-xs text-gray-300 text-center mt-1 pt-2 border-t border-gray-700">
-                <div className="font-medium">
-                  Zoom: {(zoom * 100).toFixed(0)}%
-                </div>
-                <div className="text-gray-400 text-[10px] mt-1">
-                  Arrastre para mover • Rueda para zoom
-                </div>
+              <div className="text-[10px] text-gray-300 text-center pt-1 border-t border-gray-700/50">
+                <div className="font-medium">{(zoom * 100).toFixed(0)}%</div>
               </div>
             </div>
           </div>

@@ -337,7 +337,10 @@ const RealTimePage = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Mapa - ocupa 2/3 del espacio */}
         <div className="lg:col-span-2">
-          <div className="card p-4 overflow-auto">
+          <div
+            className="card p-4 overflow-hidden"
+            style={{ overscrollBehavior: "none" }}
+          >
             <div className="p-2 sm:p-3 border-b border-primary-200">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-0">
                 <div className="flex items-center space-x-2">
@@ -635,71 +638,79 @@ const RealTimePage = () => {
               </tr>
             </thead>
             <tbody>
-              {sensorData.map((sensor) => (
-                <tr
-                  key={sensor.micro_id}
-                  className="border-b border-primary-100 hover:bg-primary-50"
-                >
-                  <td className="py-2 px-2 sm:py-3 sm:px-4">
-                    <div className="font-medium text-xs sm:text-sm">
-                      {sensor.micro_id}
-                    </div>
-                  </td>
-                  <td className="py-2 px-2 sm:py-3 sm:px-4">
-                    <div className="text-xs sm:text-sm">
-                      {sensor.location_name}
-                    </div>
-                  </td>
-                  <td className="py-2 px-2 sm:py-3 sm:px-4">
-                    <div className="flex items-center space-x-1 sm:space-x-2">
-                      <div
-                        className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full ${
-                          sensor.value >= 85
-                            ? "bg-red-500"
-                            : sensor.value >= 70
-                              ? "bg-orange-500"
-                              : sensor.value >= 50
-                                ? "bg-yellow-500"
-                                : "bg-green-500"
-                        }`}
-                      ></div>
+              {sensorData
+                .slice() // Crear copia para no mutar el array original
+                .sort((a, b) => {
+                  // Extraer números de los Micro IDs (ej: "E1" -> 1, "E2" -> 2)
+                  const numA = parseInt(a.micro_id.replace(/\D/g, "")) || 0;
+                  const numB = parseInt(b.micro_id.replace(/\D/g, "")) || 0;
+                  return numA - numB;
+                })
+                .map((sensor) => (
+                  <tr
+                    key={sensor.micro_id}
+                    className="border-b border-primary-100 hover:bg-primary-50"
+                  >
+                    <td className="py-2 px-2 sm:py-3 sm:px-4">
+                      <div className="font-medium text-xs sm:text-sm">
+                        {sensor.micro_id}
+                      </div>
+                    </td>
+                    <td className="py-2 px-2 sm:py-3 sm:px-4">
+                      <div className="text-xs sm:text-sm">
+                        {sensor.location_name}
+                      </div>
+                    </td>
+                    <td className="py-2 px-2 sm:py-3 sm:px-4">
+                      <div className="flex items-center space-x-1 sm:space-x-2">
+                        <div
+                          className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full ${
+                            sensor.value >= 85
+                              ? "bg-red-500"
+                              : sensor.value >= 70
+                                ? "bg-orange-500"
+                                : sensor.value >= 50
+                                  ? "bg-yellow-500"
+                                  : "bg-green-500"
+                          }`}
+                        ></div>
+                        <span
+                          className={`font-bold text-xs sm:text-sm ${
+                            sensor.value >= 85
+                              ? "text-red-600"
+                              : sensor.value >= 70
+                                ? "text-orange-600"
+                                : sensor.value >= 50
+                                  ? "text-yellow-600"
+                                  : "text-green-600"
+                          }`}
+                        >
+                          {sensor.value.toFixed(1)} dB
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-2 px-2 sm:py-3 sm:px-4">
                       <span
-                        className={`font-bold text-xs sm:text-sm ${
+                        className={`px-1.5 py-0.5 sm:px-2 sm:py-1 text-xs font-medium rounded-lg ${
                           sensor.value >= 85
-                            ? "text-red-600"
+                            ? "text-red-600 bg-red-50 border border-red-200"
                             : sensor.value >= 70
-                              ? "text-orange-600"
+                              ? "text-orange-600 bg-orange-50 border border-orange-200"
                               : sensor.value >= 50
-                                ? "text-yellow-600"
-                                : "text-green-600"
+                                ? "text-yellow-600 bg-yellow-50 border border-yellow-200"
+                                : "text-green-600 bg-green-50 border border-green-200"
                         }`}
                       >
-                        {sensor.value.toFixed(1)} dB
+                        {getNoiseLevelLabel(sensor.value)}
                       </span>
-                    </div>
-                  </td>
-                  <td className="py-2 px-2 sm:py-3 sm:px-4">
-                    <span
-                      className={`px-1.5 py-0.5 sm:px-2 sm:py-1 text-xs font-medium rounded-lg ${
-                        sensor.value >= 85
-                          ? "text-red-600 bg-red-50 border border-red-200"
-                          : sensor.value >= 70
-                            ? "text-orange-600 bg-orange-50 border border-orange-200"
-                            : sensor.value >= 50
-                              ? "text-yellow-600 bg-yellow-50 border border-yellow-200"
-                              : "text-green-600 bg-green-50 border border-green-200"
-                      }`}
-                    >
-                      {getNoiseLevelLabel(sensor.value)}
-                    </span>
-                  </td>
-                  <td className="py-2 px-2 sm:py-3 sm:px-4">
-                    <div className="text-xs sm:text-sm text-primary-600">
-                      {formatTime(sensor.last_update)}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="py-2 px-2 sm:py-3 sm:px-4">
+                      <div className="text-xs sm:text-sm text-primary-600">
+                        {formatTime(sensor.last_update)}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
             </tbody>
           </table>
         </div>
