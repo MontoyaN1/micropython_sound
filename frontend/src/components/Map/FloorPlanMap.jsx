@@ -993,8 +993,11 @@ const EpicenterZone = ({
     Math.min(epicenter.zone_center_latitude, PLAN_HEIGHT_TILES),
   );
 
+  // Radio máximo permitido: 7 baldosas
+  const MAX_RADIUS_TILES = 7;
+
   // Aplicar factor de escala al radio original antes de limitar
-  const scaledRadiusTiles = epicenter.zone_radius * 0.5; // Reducir a la mitad
+  const scaledRadiusTiles = Math.min(epicenter.zone_radius * 0.5, MAX_RADIUS_TILES);
 
   // Limitar radio para que no exceda los bordes del plano
   const maxRadiusX = Math.min(centerX, PLAN_WIDTH_TILES - centerX); // distancia a bordes horizontales
