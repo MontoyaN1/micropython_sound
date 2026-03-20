@@ -10,13 +10,16 @@ const TILES_HEIGHT = 66; // número de baldosas en Y (alto)
 const PLAN_WIDTH_TILES = TILES_WIDTH; // 57 baldosas (eje X)
 const PLAN_HEIGHT_TILES = TILES_HEIGHT; // 66 baldosas (eje Y)
 
-// Dimensiones base en píxeles (escalable)
-const BASE_TILE_PIXELS = 20; // píxeles por baldosa base
-const PLAN_IMAGE_WIDTH = TILES_WIDTH * BASE_TILE_PIXELS; // 1140px
-const PLAN_IMAGE_HEIGHT = TILES_HEIGHT * BASE_TILE_PIXELS; // 1320px
+// Dimensiones de la imagen del plano (2282x2642 px para 57x66 baldosas)
+const PLAN_IMAGE_WIDTH = 2282; // px reales de la imagen
+const PLAN_IMAGE_HEIGHT = 2642; // px reales de la imagen
 
-// Factores de conversión de baldosas a píxeles
-const TILES_TO_PIXELS = BASE_TILE_PIXELS; // 20px por baldosa
+// Píxeles por baldosa en la imagen original
+const PIXELS_PER_TILE_X = PLAN_IMAGE_WIDTH / TILES_WIDTH; // ~40.04 px
+const PIXELS_PER_TILE_Y = PLAN_IMAGE_HEIGHT / TILES_HEIGHT; // ~40.03 px
+
+// Para compatibilidad con código existente
+const TILES_TO_PIXELS = PIXELS_PER_TILE_X; // ~40.04 px por baldosa
 
 // Paletas de colores profesionales (compatibles con Plotly)
 const colorPalettes = {
@@ -876,60 +879,59 @@ const HeatmapLayer = memo(
   },
 );
 
-// Componente para cuadrícula de baldosas
+// Componente para cuadrícula de baldosas (solo líneas sobre la imagen)
 const GridOverlay = ({
   showGrid,
+  gridOpacity = 0.6,
   displayDimensions = { width: PLAN_IMAGE_WIDTH, height: PLAN_IMAGE_HEIGHT },
 }) => {
   if (!showGrid) return null;
 
-  const tiles = [];
+  const lines = [];
 
-  // Usar dimensiones actuales de visualización
   const displayWidth = displayDimensions.width || PLAN_IMAGE_WIDTH;
   const displayHeight = displayDimensions.height || PLAN_IMAGE_HEIGHT;
 
-  // Calcular tamaño de cada baldosa para cubrir exactamente el área disponible
   const tileWidth = displayWidth / TILES_WIDTH;
   const tileHeight = displayHeight / TILES_HEIGHT;
 
-  // Crear baldosas individuales
-  // Recorrer en coordenadas del plano (izquierda a derecha, abajo a arriba)
-  // Sistema de coordenadas: (0,0) = esquina inferior izquierda
-  for (let tileY = 0; tileY < TILES_HEIGHT; tileY++) {
-    for (let tileX = 0; tileX < TILES_WIDTH; tileX++) {
-      // Coordenadas en baldosas: tileX=0 izquierda, tileX=TILES_WIDTH-1 derecha
-      // tileY=0 abajo, tileY=TILES_HEIGHT-1 arriba
-      const xBaldosas = tileX; // 0 izquierda, TILES_WIDTH-1 derecha
-      const yBaldosas = TILES_HEIGHT - 1 - tileY; // 0 abajo, TILES_HEIGHT-1 arriba
-
-      // Convertir a píxeles: posición de la esquina superior izquierda de la baldosa
-      const leftPx = xBaldosas * tileWidth;
-      const topPx = yBaldosas * tileHeight;
-
-      // Alternar colores para crear efecto de tablero
-      const isLightTile = (tileX + tileY) % 2 === 0;
-      const tileColor = isLightTile
-        ? "rgba(200, 200, 200, 0.15)"
-        : "rgba(150, 150, 150, 0.15)";
-
-      tiles.push(
-        <div
-          key={`tile-${tileX}-${tileY}`}
-          className="absolute border border-gray-400/20"
-          style={{
-            left: `${leftPx}px`,
-            top: `${topPx}px`,
-            width: `${tileWidth}px`,
-            height: `${tileHeight}px`,
-            backgroundColor: tileColor,
-          }}
-        />,
-      );
-    }
+  // Líneas verticales (una por cada división de baldosa)
+  for (let i = 0; i <= TILES_WIDTH; i++) {
+    const x = i * tileWidth;
+    lines.push(
+      <div
+        key={`v-${i}`}
+        className="absolute bg-gray-400"
+        style={{
+          left: `${x}px`,
+          top: "0px",
+          width: "1px",
+          height: `${displayHeight}px`,
+          opacity: gridOpacity,
+        }}
+      />,
+    );
   }
 
-  return <>{tiles}</>;
+  // Líneas horizontales
+  for (let i = 0; i <= TILES_HEIGHT; i++) {
+    const y = i * tileHeight;
+    lines.push(
+      <div
+        key={`h-${i}`}
+        className="absolute bg-gray-400"
+        style={{
+          left: "0px",
+          top: `${y}px`,
+          width: `${displayWidth}px`,
+          height: "1px",
+          opacity: gridOpacity,
+        }}
+      />,
+    );
+  }
+
+  return <>{lines}</>;
 };
 
 const EpicenterZone = ({
@@ -991,8 +993,11 @@ const EpicenterZone = ({
     Math.min(epicenter.zone_center_latitude, PLAN_HEIGHT_TILES),
   );
 
+  // Radio máximo permitido: 7 baldosas
+  const MAX_RADIUS_TILES = 7;
+
   // Aplicar factor de escala al radio original antes de limitar
-  const scaledRadiusTiles = epicenter.zone_radius * 0.5; // Reducir a la mitad
+  const scaledRadiusTiles = Math.min(epicenter.zone_radius * 0.5, MAX_RADIUS_TILES);
 
   // Limitar radio para que no exceda los bordes del plano
   const maxRadiusX = Math.min(centerX, PLAN_WIDTH_TILES - centerX); // distancia a bordes horizontales
@@ -1834,9 +1839,24 @@ const FloorPlanMap = ({
               e.currentTarget.focus();
             }}
           >
-            {/* Fondo de cuadrícula de baldosas */}
+            {/* Imagen de fondo del plano */}
+            <img
+              src="/plano_zona_lectura.jpg"
+              alt="Plano zona lectura"
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                width: `${baseWidth}px`,
+                height: `${baseHeight}px`,
+                zIndex: 1,
+                opacity: 1.0,
+                filter: "brightness(1.3) contrast(1.1)",
+              }}
+            />
+
+            {/* Cuadrícula sobre la imagen */}
             <GridOverlay
               showGrid={showGrid}
+              gridOpacity={1.0}
               displayDimensions={{ width: baseWidth, height: baseHeight }}
             />
 

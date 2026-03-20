@@ -91,10 +91,10 @@ async def get_recent_historical_data(hours: int = Query(5, ge=1, le=168)):
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
-@router.get("/estadisticas/{micro_id}/{sample}", response_model=StatisticsResponse)
+@router.get("/estadisticas/{micro_id}/{sample}")
 async def get_sensor_statistics(
     micro_id: str,
-    sample: int,  # Mantenido por compatibilidad, ignorado
+    sample: int,
     hours: int = Query(24, ge=1, le=720),
 ):
     """Obtener estadísticas de un micro específico (sample ignorado)"""
@@ -102,30 +102,50 @@ async def get_sensor_statistics(
         stats = influxdb_client.get_sensor_statistics(micro_id=micro_id, hours=hours)
 
         if not stats:
-            raise HTTPException(
-                status_code=404, detail=f"No se encontraron datos para micro {micro_id}"
-            )
+            return {
+                "micro_id": micro_id,
+                "sample": 0,
+                "count": 0,
+                "mean": 0,
+                "min": 0,
+                "max": 0,
+                "std": 0,
+                "data_points": [],
+                "message": f"No hay datos para {micro_id} en las últimas {hours} horas"
+            }
 
-        # Convertir data_points a HistoricalData
         data_points = []
         if "data_points" in stats:
             for point in stats["data_points"]:
-                data_points.append(HistoricalData(**point))
+                try:
+                    data_points.append(HistoricalData(**point))
+                except Exception:
+                    pass
 
-        return StatisticsResponse(
-            micro_id=stats["micro_id"],
-            sample=stats["sample"],  # Siempre 0
-            count=stats["count"],
-            mean=stats["mean"],
-            min=stats["min"],
-            max=stats["max"],
-            std=stats["std"],
-            data_points=data_points,
-        )
+        return {
+            "micro_id": stats["micro_id"],
+            "sample": stats["sample"],
+            "count": stats["count"],
+            "mean": stats["mean"],
+            "min": stats["min"],
+            "max": stats["max"],
+            "std": stats["std"],
+            "data_points": data_points,
+        }
 
     except Exception as e:
         logger.error(f"Error obteniendo estadísticas: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+        return {
+            "micro_id": micro_id,
+            "sample": 0,
+            "count": 0,
+            "mean": 0,
+            "min": 0,
+            "max": 0,
+            "std": 0,
+            "data_points": [],
+            "error": str(e)
+        }
 
 
 @router.get("/health", response_model=HealthResponse)
