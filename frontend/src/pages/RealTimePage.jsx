@@ -328,7 +328,7 @@ const RealTimePage = () => {
             {formatTime(lastUpdate)}
           </div>
           <div className="text-xs sm:text-sm text-primary-600">
-            Actualización cada 5 segundos
+            Actualización cada 10 - 20 segundos
           </div>
         </div>
       </div>

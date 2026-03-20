@@ -68,8 +68,12 @@ class InfluxDBService:
             end_time = datetime.now()
         
         # Formatear tiempos para Flux
-        start_str = start_time.isoformat() + "Z"
-        end_str = end_time.isoformat() + "Z"
+        # Si ya tiene timezone info (isoformat contiene +o Z), no añadir nada
+        # Si es naive, asumir UTC y añadir Z
+        start_iso = start_time.isoformat()
+        end_iso = end_time.isoformat()
+        start_str = start_iso if "Z" in start_iso or "+" in start_iso else start_iso + "Z"
+        end_str = end_iso if "Z" in end_iso or "+" in end_iso else end_iso + "Z"
         
         # Construir filtro de micro_ids
         micro_filter = ""
@@ -159,17 +163,20 @@ class InfluxDBService:
         if not data:
             return {}
         
-        values = [d["value"] for d in data]
+        values = [d["value"] for d in data if d.get("value") is not None]
+        
+        if not values:
+            return {}
         
         return {
             "micro_id": micro_id,
             "sample": 0,
             "count": len(values),
-            "mean": float(np.mean(values)) if values else 0,
-            "min": float(np.min(values)) if values else 0,
-            "max": float(np.max(values)) if values else 0,
-            "std": float(np.std(values)) if values else 0,
-            "data_points": data[:100]  # Limitar para respuesta
+            "mean": float(np.mean(values)),
+            "min": float(np.min(values)),
+            "max": float(np.max(values)),
+            "std": float(np.std(values)),
+            "data_points": data[:100]
         }
 
 # Instancia global del cliente InfluxDB

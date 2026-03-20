@@ -29,7 +29,6 @@ const HistoricalPage = () => {
     setLoading(true);
     try {
       if (dateMode === "range") {
-        // Modo rango predefinido
         const hoursMap = {
           "1h": 1,
           "5h": 5,
@@ -40,57 +39,21 @@ const HistoricalPage = () => {
         const data = await fetchRecentData(hoursMap[timeRange]);
         setHistoricalData(data);
       } else {
-        // Modo fecha específica - calcular horas desde la fecha seleccionada hasta ahora
-        // Parsear la fecha en hora local (no UTC)
+        // Modo fecha específica - usar rango exacto de fechas
         const [year, month, day] = specificDate.split("-").map(Number);
-        const selectedDate = new Date(year, month - 1, day);
-        const startOfDay = new Date(selectedDate);
-        startOfDay.setHours(0, 0, 0, 0);
-
-        const now = new Date();
-        const startOfToday = new Date(now);
-        startOfToday.setHours(0, 0, 0, 0);
-
-        // Calcular diferencia en horas desde el inicio del día seleccionado
-        const diffMs = now - startOfDay;
-        const diffHours = Math.ceil(diffMs / (1000 * 60 * 60));
-
-        // Si la fecha es hoy, usar 24 horas para obtener datos del día completo
-        const hoursToFetch =
-          startOfDay.getTime() === startOfToday.getTime()
-            ? 24
-            : Math.min(diffHours, 720); // Máximo 30 días (720 horas)
+        const startOfDay = new Date(year, month - 1, day, 0, 0, 0, 0);
+        const endOfDay = new Date(year, month - 1, day, 23, 59, 59, 999);
 
         console.log(
-          `Consultando ${hoursToFetch} horas desde ${startOfDay.toLocaleDateString()}`,
+          `Consultando rango: ${startOfDay.toISOString()} a ${endOfDay.toISOString()}`,
         );
-        const data = await fetchRecentData(hoursToFetch);
 
-        // Filtrar para mostrar solo datos del día seleccionado
-        // Usar comparación de fechas en UTC para evitar problemas de zona horaria
-        const filteredData = data.filter((row) => {
-          const rowDate = new Date(row.time);
-          const rowUTCDate = new Date(
-            Date.UTC(
-              rowDate.getUTCFullYear(),
-              rowDate.getUTCMonth(),
-              rowDate.getUTCDate(),
-            ),
-          );
-          const selectedUTCDate = new Date(
-            Date.UTC(
-              startOfDay.getUTCFullYear(),
-              startOfDay.getUTCMonth(),
-              startOfDay.getUTCDate(),
-            ),
-          );
-          return rowUTCDate.getTime() === selectedUTCDate.getTime();
-        });
-
-        setHistoricalData(filteredData);
+        const data = await fetchDateRangeData(startOfDay, endOfDay, []);
+        setHistoricalData(data || []);
       }
     } catch (error) {
       console.error("Error loading historical data:", error);
+      setHistoricalData([]);
     } finally {
       setLoading(false);
     }
@@ -100,19 +63,7 @@ const HistoricalPage = () => {
     try {
       let hours = 24; // Por defecto 24 horas
 
-      if (dateMode === "specific") {
-        // Para fecha específica, calcular horas desde esa fecha
-        const selectedDate = new Date(specificDate);
-        const now = new Date();
-        const diffMs = now - selectedDate;
-        hours = Math.ceil(diffMs / (1000 * 60 * 60));
-
-        // Si la fecha es hoy, usar 24 horas
-        if (selectedDate.toDateString() === now.toDateString()) {
-          hours = 24;
-        }
-      } else if (dateMode === "range") {
-        // Para rango predefinido, usar el mapeo
+      if (dateMode === "range") {
         const hoursMap = {
           "1h": 1,
           "5h": 5,
@@ -122,6 +73,7 @@ const HistoricalPage = () => {
         };
         hours = hoursMap[timeRange];
       }
+      // Para "specific" mode, las estadísticas vendrán de los datos ya cargados en historicalData
 
       const stats = await fetchSensorStatistics(microId, hours);
       setSensorStats(stats);
@@ -330,7 +282,10 @@ const HistoricalPage = () => {
                   { id: "E3", name: "E3" },
                   { id: "E4", name: "E4" },
                   { id: "E5", name: "E5" },
-                  { id: "E255", name: "E255" },
+                  { id: "E6", name: "E6" },
+                  { id: "E7", name: "E7" },
+                  { id: "E8", name: "E8" },
+                  { id: "E9", name: "E9" },
                 ].map((micro) => (
                   <button
                     key={micro.id}
@@ -417,14 +372,14 @@ const HistoricalPage = () => {
         <h3 className="font-semibold text-base sm:text-lg mb-3 sm:mb-4">
           Estadísticas del Sensor {selectedSensor}
         </h3>
-        {sensorStats ? (
+        {sensorStats && sensorStats.count > 0 ? (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4">
             <div className="bg-primary-50 rounded-xl p-3 sm:p-4">
               <div className="text-xs sm:text-sm text-primary-600 mb-1">
                 Promedio
               </div>
               <div className="text-xl sm:text-2xl font-bold">
-                {sensorStats.mean.toFixed(1)} dB
+                {sensorStats.mean?.toFixed(1) || "0.0"} dB
               </div>
             </div>
             <div className="bg-primary-50 rounded-xl p-3 sm:p-4">
@@ -432,7 +387,7 @@ const HistoricalPage = () => {
                 Máximo
               </div>
               <div className="text-xl sm:text-2xl font-bold">
-                {sensorStats.max.toFixed(1)} dB
+                {sensorStats.max?.toFixed(1) || "0.0"} dB
               </div>
             </div>
             <div className="bg-primary-50 rounded-xl p-3 sm:p-4">
@@ -440,7 +395,7 @@ const HistoricalPage = () => {
                 Mínimo
               </div>
               <div className="text-xl sm:text-2xl font-bold">
-                {sensorStats.min.toFixed(1)} dB
+                {sensorStats.min?.toFixed(1) || "0.0"} dB
               </div>
             </div>
             <div className="bg-primary-50 rounded-xl p-3 sm:p-4">
@@ -448,13 +403,13 @@ const HistoricalPage = () => {
                 Registros
               </div>
               <div className="text-xl sm:text-2xl font-bold">
-                {sensorStats.count}
+                {sensorStats.count || 0}
               </div>
             </div>
           </div>
         ) : (
-          <div className="text-center py-6 sm:py-8 text-primary-600">
-            Cargando estadísticas...
+          <div className="text-center py-6 sm:py-8 text-primary-500">
+            No hay datos para el sensor {selectedSensor} en el período seleccionado
           </div>
         )}
       </div>
@@ -491,6 +446,10 @@ const HistoricalPage = () => {
         ) : historicalData.length === 0 ? (
           <div className="text-center py-12 text-primary-600">
             No hay datos históricos disponibles para el período seleccionado
+          </div>
+        ) : historicalData.filter((row) => row.micro_id === selectedSensor).length === 0 ? (
+          <div className="text-center py-12 text-primary-600">
+            No hay datos para el sensor {selectedSensor} en el período seleccionado
           </div>
         ) : (
           <div className="overflow-x-auto -mx-4 sm:mx-0">
