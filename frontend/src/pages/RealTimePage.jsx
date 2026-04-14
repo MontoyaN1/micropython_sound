@@ -189,6 +189,18 @@ const RealTimePage = () => {
     });
   };
 
+  const formatDateTime = (timestamp) => {
+    if (!timestamp) return "--/--/---- --:--:--";
+    const date = new Date(timestamp);
+    // Colombia está en UTC-5, restar 5 horas para mostrar hora correcta
+    date.setHours(date.getHours() - 5);
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = date.getFullYear();
+    const time = date.toLocaleTimeString("es-CO", { hour12: false });
+    return `${day}/${month}/${year} ${time}`;
+  };
+
   const getNoiseLevelColor = (value) => {
     if (value >= 85) return "text-red-600 bg-red-50 border-red-200";
     if (value >= 70) return "text-orange-600 bg-orange-50 border-orange-200";
@@ -706,7 +718,7 @@ const RealTimePage = () => {
                     </td>
                     <td className="py-2 px-2 sm:py-3 sm:px-4">
                       <div className="text-xs sm:text-sm text-primary-600">
-                        {formatTime(sensor.last_update)}
+                        {formatDateTime(sensor.last_update)}
                       </div>
                     </td>
                   </tr>

@@ -1,7 +1,4 @@
-"""Gateway ESP32 minimalista - PING/PONG para sincronización de canales
-Basado en el ejemplo simple del usuario. Responde PING, recibe datos, envía MQTT.
-WiFi se reconecta solo cuando es necesario para MQTT.
-"""
+"""Gateway ESP32 - PING/PONG conexión con Sender mediante ESPNOW y MQTT para envió de datos."""
 
 import json
 import time
@@ -20,16 +17,15 @@ from config import (
     WIFI_PASSWORD,
     WIFI_SSID,
 )
-from machine import Pin
+from machine import WDT, Pin
 from umqtt.simple import MQTTClient
 
-# LED para feedback
+# ── LED ────────────────────────────────────────────────────────────────────────
 led = Pin(LED_PIN, Pin.OUT)
 led.off()
 
 
 def blink(times=1):
-    """Parpadeo simple."""
     for _ in range(times):
         led.on()
         time.sleep(0.05)
@@ -38,205 +34,242 @@ def blink(times=1):
             time.sleep(0.05)
 
 
+# ── WiFi: reconexión SIN tocar wifi.active() ───────────────────────────────────
+def reconectar_wifi(wifi, canal_anterior, ssid, password, intentos=10):
+    """Reconecta WiFi sin desactivar la interfaz (ESP-NOW sobrevive).
+
+    Returns:
+        (bool, int): (éxito, canal_actual)
+    """
+    print("[WiFi] Desconectado — reconectando sin bajar interfaz...")
+    try:
+        wifi.connect(ssid, password)
+    except Exception as e:
+        print(f"[WiFi] Error al llamar connect(): {e}")
+        return False, canal_anterior
+
+    for _ in range(intentos):
+        if wifi.isconnected():
+            try:
+                canal = wifi.config("channel")
+            except Exception:
+                canal = canal_anterior
+            print(f"[WiFi] Reconectado. Canal: {canal}")
+            return True, canal
+        time.sleep(0.5)
+
+    print("[WiFi] No se pudo reconectar en el tiempo límite.")
+    return False, canal_anterior
+
+
+# ── MQTT con timeout ──────────────────────────────────────────────────────────
+def enviar_mqtt(broker, port, client_id, user, password, topic, payload):
+    """Intenta publicar en MQTT. Retorna True si tuvo éxito."""
+    import usocket as socket
+
+    # Configurar socket timeout antes de conectar
+    # umqtt.simple abre el socket internamente, pero podemos parchear el timeout
+    # usando la constante IPPROTO_TCP disponible en MicroPython.
+    client = MQTTClient(
+        client_id,
+        broker,
+        port,
+        user if user else None,
+        password if password else None,
+        keepalive=10,
+    )
+    # MicroPython expone el socket en client.sock después de connect(),
+    # pero podemos setear SO_TIMEOUT antes si accedemos al socket directamente.
+    # Como alternativa segura usamos keepalive=10 y confiamos en el WDT global.
+    client.connect()
+    client.publish(topic, payload)
+    client.disconnect()
+    return True
+
+
+# ── Main ───────────────────────────────────────────────────────────────────────
 def main():
     print("=" * 40)
-    print("GATEWAY MINIMAL")
-    print("=" * 40)
-    print(f"WiFi: {WIFI_SSID}")
-    print(f"MQTT: {MQTT_BROKER}:{MQTT_PORT}")
+    print("GATEWAY ROBUSTO")
     print("=" * 40)
 
-    # 1. Conectar WiFi
+    # Watchdog: si el bucle se congela >45 s, reinicia el ESP32
+    wdt = WDT(timeout=45_000)
+
+    # 1. WiFi (activar UNA SOLA VEZ)
     wifi = network.WLAN(network.STA_IF)
     wifi.active(True)
     wifi.connect(WIFI_SSID, WIFI_PASSWORD)
 
-    for _ in range(20):  # 10 segundos máximo
+    for _ in range(20):
+        wdt.feed()
         if wifi.isconnected():
             break
         time.sleep(0.5)
 
     if not wifi.isconnected():
-        print("Error WiFi")
-        return
+        print("[WiFi] No conectó en el arranque — reiniciando...")
+        # El WDT reiniciará si se congela; forzamos reinicio manual
+        import machine
 
-    ip = wifi.ifconfig()[0]
+        machine.reset()
+
     try:
         canal = wifi.config("channel")
-        print(f"Canal: {canal}")
-    except:
-        canal = 1  # Canal por defecto si hay error
-        print(f"Canal: {canal} (por defecto, error al obtener)")
-    print(f"WiFi OK: {ip}")
+    except Exception:
+        canal = 1
 
-    # Mostrar MAC
-    mac = wifi.config("mac").hex()
-    mac_fmt = ":".join(mac[i : i + 2] for i in range(0, 12, 2))
+    ip = wifi.ifconfig()[0]
+    mac = wifi.config("mac")
+    mac_fmt = ":".join(f"{b:02x}" for b in mac)
+    print(f"IP : {ip}")
     print(f"MAC: {mac_fmt}")
-
-    # 2. Inicializar ESP-NOW
-    e = espnow.ESPNow()
-    e.active(True)
-    print("ESP-NOW listo (responde PING)")
+    print(f"CH : {canal}")
     print("=" * 40)
 
-    # 3. Variables
-    datos = {}  # micro_id: [valores]
-    ultimo_envio = 0
-    mensajes = 0
+    # 2. ESP-NOW (la interfaz WiFi ya está activa; nunca se baja)
+    e = espnow.ESPNow()
+    e.active(True)
+    print("ESP-NOW listo")
+
+    # 3. Estado
+    datos = {}  # micro_id -> [valores float]
+    ultimo_envio = time.time()
+    mensajes_rx = 0
+    errores_mqtt = 0
+    COOLDOWN_FALLO = 15  # segundos mínimos entre intentos si hay fallo MQTT
 
     # 4. Bucle principal
     try:
         while True:
-            # Recibir mensajes (non-blocking)
+            wdt.feed()  # ← siempre al inicio del bucle
+
+            # ── Recibir ESP-NOW ────────────────────────────────────────────
             try:
                 host, msg = e.recv(0)
-                if msg:
-                    mensajes += 1
-                    # Asegurar que el host está agregado como peer para poder responder
+            except (OSError, ValueError):
+                host, msg = None, None
+
+            if msg:
+                mensajes_rx += 1
+
+                # Asegurar peer para poder responder
+                try:
+                    e.add_peer(host)
+                except OSError:
+                    pass
+
+                # ── PING → PONG ────────────────────────────────────────────
+                if msg == b"PING" or msg.startswith(b"PING"):
                     try:
-                        e.add_peer(host)
-                    except OSError:
-                        pass  # Ya está agregado o error, continuar
+                        ch_actual = wifi.config("channel")
+                    except Exception:
+                        ch_actual = canal
+                    respuesta = f"PONG:{ch_actual}".encode()
+                    try:
+                        e.send(host, respuesta)
+                        print(f"[PONG] → {host.hex()[:8]} canal {ch_actual}")
+                    except Exception as err:
+                        print(f"[PONG] Error: {err}")
 
-                    # Siempre imprimir mensajes recibidos para debugging
-                    print(f"RCV[{mensajes}]: {msg}")
-
-                    # Responder PING
-                    if msg == b"PING" or msg.startswith(b"PING"):
-                        try:
-                            current_channel = wifi.config("channel")
-                        except:
-                            current_channel = canal
-                        respuesta = f"PONG:{current_channel}".encode()
-                        try:
-                            e.send(host, respuesta)
-                            print(
-                                f"✓ PONG enviado a {host.hex()[:8]}... canal {current_channel}"
-                            )
-                        except Exception as send_err:
-                            print(f"✗ Error enviando PONG: {send_err}")
-
-                    # Datos de sensor (formato "E1:45.2")
+                # ── Datos de sensor ("E1:45.2") ────────────────────────────
+                else:
                     try:
                         texto = msg.decode().strip()
-                        if ":" in texto and not texto.startswith("PING"):
-                            micro, valor = texto.split(":")
-                            if valor not in ["INICIO", "FIN"]:
-                                try:
-                                    db = float(valor)
-                                    if micro not in datos:
-                                        datos[micro] = []
-                                    datos[micro].append(db)
-                                    # Máximo 3 muestras
-                                    if len(datos[micro]) > 3:
-                                        datos[micro] = datos[micro][-3:]
-                                    # Siempre imprimir datos de sensores
-                                    print(f"  {micro}: {db:.1f} dB")
-                                    blink(1)
-                                except ValueError:
-                                    pass
-                    except UnicodeDecodeError:
-                        pass  # No es texto
-            except (OSError, ValueError):
-                pass  # No hay mensajes
+                        if ":" in texto:
+                            micro, valor = texto.split(":", 1)
+                            if valor not in ("INICIO", "FIN"):
+                                db = float(valor)
+                                bucket = datos.setdefault(micro, [])
+                                bucket.append(db)
+                                if len(bucket) > 3:
+                                    datos[micro] = bucket[-3:]
+                                print(f"[RX] {micro}: {db:.1f} dB  (msg#{mensajes_rx})")
+                                blink(1)
+                    except (UnicodeDecodeError, ValueError):
+                        pass
 
-            # Enviar MQTT cada 10 segundos (si hay datos)
+            # ── Envío MQTT ─────────────────────────────────────────────────
             ahora = time.time()
-            if ahora - ultimo_envio >= MQTT_SEND_INTERVAL and datos:
-                print(f"\n[MQTT] {len(datos)} sensores con datos")
+            tiempo_desde_ultimo = ahora - ultimo_envio
 
-                # Verificar WiFi antes de enviar
-                wifi_ok = wifi.isconnected()
-                if not wifi_ok:
-                    print("[WiFi] Desconectado, intentando reconectar...")
-                    try:
-                        # Resetear interfaz si está en estado de error
-                        wifi.active(False)
-                        time.sleep(0.5)
-                        wifi.active(True)
-                        time.sleep(0.5)
-                        wifi.connect(WIFI_SSID, WIFI_PASSWORD)
+            if tiempo_desde_ultimo >= MQTT_SEND_INTERVAL and datos:
+                print(
+                    f"\n[MQTT] Ciclo — {len(datos)} sensores, {errores_mqtt} errores previos"
+                )
 
-                        # Esperar conexión
-                        for _ in range(10):
-                            if wifi.isconnected():
-                                wifi_ok = True
-                                try:
-                                    canal = wifi.config("channel")
-                                    print(f"[WiFi] Reconectado, canal {canal}")
-                                except:
-                                    print(f"[WiFi] Reconectado, canal anterior {canal}")
-                                break
-                            time.sleep(0.5)
-                    except Exception as w_err:
-                        print(f"[WiFi] Error reconectando: {w_err}")
+                # Verificar/reconectar WiFi SIN bajar interfaz
+                if not wifi.isconnected():
+                    ok, canal = reconectar_wifi(wifi, canal, WIFI_SSID, WIFI_PASSWORD)
+                    if not ok:
+                        print("[MQTT] Sin WiFi — datos conservados, esperando cooldown")
+                        ultimo_envio = (
+                            ahora  # avanzar timer para no reintentar inmediatamente
+                        )
+                        time.sleep(0.1)
+                        continue
 
-                if not wifi_ok:
-                    print("[WiFi] No se pudo reconectar, datos guardados")
-                    print(f"[MQTT] {len(datos)} muestras pendientes")
-                    # No limpiar datos, intentar en próximo ciclo
-                    time.sleep(1)
-                    continue
-
-                # Preparar JSON (usar canal actual o anterior si hay error)
+                # Refrescar canal real
                 try:
-                    current_channel = wifi.config("channel")
-                except:
-                    current_channel = canal
+                    canal = wifi.config("channel")
+                except Exception:
+                    pass
 
-                mensaje = {
+                # Construir payload
+                try:
+                    ch_actual = wifi.config("channel")
+                except Exception:
+                    ch_actual = canal
+
+                payload = {
                     "timestamp": int(ahora),
                     "gateway_mac": mac_fmt,
-                    "gateway_channel": current_channel,
-                    "sensors": [],
+                    "gateway_channel": ch_actual,
+                    "sensors": [
+                        {"micro_id": mid, "value": round(db, 1), "sample": i + 1}
+                        for mid, muestras in datos.items()
+                        for i, db in enumerate(muestras)
+                    ],
                 }
+                n_muestras = len(payload["sensors"])
 
-                for micro, muestras in datos.items():
-                    for i, db in enumerate(muestras):
-                        mensaje["sensors"].append(
-                            {
-                                "micro_id": micro,
-                                "value": round(db, 1),
-                                "sample": i + 1,
-                            }
-                        )
-
-                print(f"Enviando {len(mensaje['sensors'])} muestras...")
-
-                # Enviar
+                # Intentar envío
                 try:
-                    mqtt = MQTTClient(
-                        MQTT_CLIENT_ID,
+                    wdt.feed()
+                    enviar_mqtt(
                         MQTT_BROKER,
                         MQTT_PORT,
-                        MQTT_USER if MQTT_USER else None,
-                        MQTT_PASSWORD if MQTT_PASSWORD else None,
+                        MQTT_CLIENT_ID,
+                        MQTT_USER,
+                        MQTT_PASSWORD,
+                        MQTT_TOPIC,
+                        json.dumps(payload),
                     )
-                    mqtt.connect()
-                    mqtt.publish(MQTT_TOPIC, json.dumps(mensaje))
-                    print(f"✓ MQTT enviado")
+                    print(f"[MQTT] ✓ {n_muestras} muestras enviadas")
                     blink(2)
-
-                    # Limpiar datos enviados
-                    datos = {}
+                    datos = {}  # limpiar solo en éxito
+                    errores_mqtt = 0
                     ultimo_envio = ahora
 
-                    mqtt.disconnect()
                 except Exception as err:
-                    print(f"✗ MQTT error: {err}")
-                    print(f"Datos guardados para próximo intento")
+                    errores_mqtt += 1
+                    print(f"[MQTT] ✗ Error #{errores_mqtt}: {err}")
+                    print(
+                        f"[MQTT] Datos conservados — próximo intento en {COOLDOWN_FALLO}s"
+                    )
+                    # Avanzar timer con cooldown para no martillar el broker
+                    ultimo_envio = ahora - MQTT_SEND_INTERVAL + COOLDOWN_FALLO
 
-                time.sleep(1)  # Pausa post-envío
+                time.sleep(1)  # pausa post-ciclo MQTT
 
-            time.sleep(0.1)  # Pausa para CPU
+            time.sleep(0.05)  # CPU yield
 
     except KeyboardInterrupt:
-        print("\n\nInterrupción por usuario")
+        print("\n[GATEWAY] Interrupción por usuario")
     finally:
         e.active(False)
         led.off()
-        print("Hasta luego!")
+        print("[GATEWAY] Detenido")
 
 
 if __name__ == "__main__":
