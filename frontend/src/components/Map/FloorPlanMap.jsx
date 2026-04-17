@@ -311,9 +311,10 @@ const SensorMarker = ({
             <div className="text-sm text-gray-600">{location_name}</div>
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div>
-                <div className="text-gray-500">Coordenadas</div>
+                <div className="text-gray-500">Posición</div>
                 <div>
-                  {tilesX.toFixed(1)} baldosas, {tilesY.toFixed(1)} baldosas
+                  X {(tilesX * TILE_SIZE_METERS).toFixed(1)} - Y{" "}
+                  {(tilesY * TILE_SIZE_METERS).toFixed(1)} aprox
                 </div>
               </div>
               <div>
@@ -328,17 +329,6 @@ const SensorMarker = ({
                         : "Bajo"}
                 </div>
               </div>
-            </div>
-
-            <div className="text-xs text-gray-500 border-t pt-2">
-              Actualizado:{" "}
-              {(() => {
-                const date = new Date(last_update);
-                date.setHours(date.getHours() - 5);
-                return date.toLocaleTimeString("es-CO", {
-                  hour12: false,
-                });
-              })()}
             </div>
           </div>
         </div>

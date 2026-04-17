@@ -636,13 +636,16 @@ const RealTimePage = () => {
                   Micro ID
                 </th>
                 <th className="text-left py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-medium text-primary-600">
-                  Ubicación
-                </th>
-                <th className="text-left py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-medium text-primary-600">
                   Nivel de Ruido
                 </th>
                 <th className="text-left py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-medium text-primary-600">
                   Estado
+                </th>
+                <th className="text-left py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-medium text-primary-600">
+                  Ubicación
+                </th>
+                <th className="text-left py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-medium text-primary-600">
+                  Posición
                 </th>
                 <th className="text-left py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-medium text-primary-600">
                   Última Actualización
@@ -666,11 +669,6 @@ const RealTimePage = () => {
                     <td className="py-2 px-2 sm:py-3 sm:px-4">
                       <div className="font-medium text-xs sm:text-sm">
                         {sensor.micro_id}
-                      </div>
-                    </td>
-                    <td className="py-2 px-2 sm:py-3 sm:px-4">
-                      <div className="text-xs sm:text-sm">
-                        {sensor.location_name}
                       </div>
                     </td>
                     <td className="py-2 px-2 sm:py-3 sm:px-4">
@@ -715,6 +713,17 @@ const RealTimePage = () => {
                       >
                         {getNoiseLevelLabel(sensor.value)}
                       </span>
+                    </td>
+                    <td className="py-2 px-2 sm:py-3 sm:px-4">
+                      <div className="text-xs sm:text-sm">
+                        {sensor.location_name}
+                      </div>
+                    </td>
+                    <td className="py-2 px-2 sm:py-3 sm:px-4">
+                      <div className="text-xs sm:text-sm text-primary-600">
+                        X {(sensor.latitude * TILE_SIZE_METERS).toFixed(1)} - Y{" "}
+                        {(sensor.longitude * TILE_SIZE_METERS).toFixed(1)} aprox
+                      </div>
                     </td>
                     <td className="py-2 px-2 sm:py-3 sm:px-4">
                       <div className="text-xs sm:text-sm text-primary-600">
