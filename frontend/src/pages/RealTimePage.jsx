@@ -722,7 +722,7 @@ const RealTimePage = () => {
                     <td className="py-2 px-2 sm:py-3 sm:px-4">
                       <div className="text-xs sm:text-sm text-primary-600">
                         X {(sensor.longitude * TILE_SIZE_METERS).toFixed(1)} - Y{" "}
-                        {((TILES_HEIGHT - sensor.latitude) * TILE_SIZE_METERS).toFixed(1)} aprox
+                        {(sensor.latitude * TILE_SIZE_METERS).toFixed(1)} m aprox
                       </div>
                     </td>
                     <td className="py-2 px-2 sm:py-3 sm:px-4">
