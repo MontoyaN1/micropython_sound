@@ -314,7 +314,7 @@ const SensorMarker = ({
                 <div className="text-gray-500">Posición</div>
                 <div>
                   X {(tilesX * TILE_SIZE_METERS).toFixed(1)} - Y{" "}
-                  {(tilesY * TILE_SIZE_METERS).toFixed(1)} aprox
+                  {(tilesY * TILE_SIZE_METERS).toFixed(1)} m aprox
                 </div>
               </div>
               <div>
