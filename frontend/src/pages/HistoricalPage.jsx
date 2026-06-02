@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Calendar,
   BarChart3,
@@ -19,10 +19,21 @@ const HistoricalPage = () => {
   const [sensorStats, setSensorStats] = useState(null);
   const [timeRange, setTimeRange] = useState("24h");
   const [selectedSensor, setSelectedSensor] = useState("E1");
-  const [dateMode, setDateMode] = useState("range"); // 'range' o 'specific'
+  const [dateMode, setDateMode] = useState("range"); // 'range' o 'specific' o 'custom'
   const [specificDate, setSpecificDate] = useState(() => {
     const today = new Date();
     return today.toISOString().split("T")[0]; // Formato YYYY-MM-DD
+  });
+  // Custom date range state
+  const [customStartDate, setCustomStartDate] = useState(() => {
+    const today = new Date();
+    const thirtyDaysAgo = new Date(today);
+    thirtyDaysAgo.setDate(today.getDate() - 30);
+    return thirtyDaysAgo.toISOString().split("T")[0];
+  });
+  const [customEndDate, setCustomEndDate] = useState(() => {
+    const today = new Date();
+    return today.toISOString().split("T")[0];
   });
 
   const loadHistoricalData = async () => {
@@ -36,19 +47,57 @@ const HistoricalPage = () => {
           "7d": 168,
           "30d": 720,
         };
-        const data = await fetchRecentData(hoursMap[timeRange]);
-        setHistoricalData(data);
-      } else {
+
+        // Para 30 días, usar rango de fechas explícito para mejor control
+        if (timeRange === "30d") {
+          const endDate = new Date();
+          const startDate = new Date(
+            endDate.getTime() - 30 * 24 * 60 * 60 * 1000,
+          );
+          // No pasar aggWindow para que se calcule automáticamente
+          const data = await fetchDateRangeData(startDate, endDate, []);
+          setHistoricalData(data);
+        } else {
+          const data = await fetchRecentData(hoursMap[timeRange]);
+          setHistoricalData(data);
+        }
+      } else if (dateMode === "specific") {
         // Modo fecha específica - usar rango exacto de fechas
         const [year, month, day] = specificDate.split("-").map(Number);
-        const startOfDay = new Date(year, month - 1, day, 0, 0, 0, 0);
-        const endOfDay = new Date(year, month - 1, day, 23, 59, 59, 999);
+        // Crear fechas en UTC para evitar problemas de timezone
+        const startOfDay = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+        const endOfDay = new Date(
+          Date.UTC(year, month - 1, day, 23, 59, 59, 999),
+        );
 
         console.log(
-          `Consultando rango: ${startOfDay.toISOString()} a ${endOfDay.toISOString()}`,
+          `Consultando rango específico: ${startOfDay.toISOString()} a ${endOfDay.toISOString()}`,
         );
 
         const data = await fetchDateRangeData(startOfDay, endOfDay, []);
+        setHistoricalData(data || []);
+      } else if (dateMode === "custom") {
+        // Modo rango custom - usar fechas específicas
+        const [startYear, startMonth, startDay] = customStartDate
+          .split("-")
+          .map(Number);
+        const [endYear, endMonth, endDay] = customEndDate
+          .split("-")
+          .map(Number);
+
+        // Crear fechas en UTC para evitar problemas de timezone
+        const startDateTime = new Date(
+          Date.UTC(startYear, startMonth - 1, startDay, 0, 0, 0, 0),
+        );
+        const endDateTime = new Date(
+          Date.UTC(endYear, endMonth - 1, endDay, 23, 59, 59, 999),
+        );
+
+        console.log(
+          `Consultando rango custom: ${startDateTime.toISOString()} a ${endDateTime.toISOString()}`,
+        );
+
+        const data = await fetchDateRangeData(startDateTime, endDateTime, []);
         setHistoricalData(data || []);
       }
     } catch (error) {
@@ -61,7 +110,7 @@ const HistoricalPage = () => {
 
   const loadSensorStatistics = async (microId) => {
     try {
-      let hours = 24; // Por defecto 24 horas
+      let options = { hours: 24 }; // Por defecto 24 horas
 
       if (dateMode === "range") {
         const hoursMap = {
@@ -71,43 +120,108 @@ const HistoricalPage = () => {
           "7d": 168,
           "30d": 720,
         };
-        hours = hoursMap[timeRange];
-      }
-      // Para "specific" mode, las estadísticas vendrán de los datos ya cargados en historicalData
+        options = { hours: hoursMap[timeRange] };
+      } else if (dateMode === "specific") {
+        // Para modo specific, usar el rango exacto de fecha
+        const [year, month, day] = specificDate.split("-").map(Number);
+        // Crear fechas en UTC para evitar problemas de timezone
+        const startOfDay = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+        const endOfDay = new Date(
+          Date.UTC(year, month - 1, day, 23, 59, 59, 999),
+        );
 
-      const stats = await fetchSensorStatistics(microId, hours);
+        options = {
+          start_time: startOfDay.toISOString(),
+          end_time: endOfDay.toISOString(),
+          aggregation_window: "5m", // Más resolución para un día
+        };
+      } else if (dateMode === "custom") {
+        // Para modo custom, usar las fechas exactas
+        const [startYear, startMonth, startDay] = customStartDate
+          .split("-")
+          .map(Number);
+        const [endYear, endMonth, endDay] = customEndDate
+          .split("-")
+          .map(Number);
+
+        // Crear fechas en UTC para evitar problemas de timezone
+        const startDateTime = new Date(
+          Date.UTC(startYear, startMonth - 1, startDay, 0, 0, 0, 0),
+        );
+        const endDateTime = new Date(
+          Date.UTC(endYear, endMonth - 1, endDay, 23, 59, 59, 999),
+        );
+
+        // Calcular duración para determinar aggregation_window adecuada
+        const durationHours = Math.ceil(
+          (endDateTime - startDateTime) / (1000 * 60 * 60),
+        );
+        let aggWindow = "5m";
+        if (durationHours > 168) aggWindow = "1h"; // > 7 días
+        if (durationHours > 720) aggWindow = "6h"; // > 30 días
+
+        options = {
+          start_time: startDateTime.toISOString(),
+          end_time: endDateTime.toISOString(),
+          aggregation_window: aggWindow,
+        };
+      }
+
+      const stats = await fetchSensorStatistics(microId, options);
       setSensorStats(stats);
     } catch (error) {
       console.error("Error loading sensor statistics:", error);
+      setSensorStats({
+        micro_id: microId,
+        count: 0,
+        mean: 0,
+        min: 0,
+        max: 0,
+        std: 0,
+        data_points: [],
+      });
     }
   };
 
+  // Debounce helper to prevent rapid-fire requests
+  const debounce = (func, wait) => {
+    let timeout;
+    return (...args) => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => func.apply(this, args), wait);
+    };
+  };
+
+  // Create debounced version of loadHistoricalData
+  const debouncedLoadHistoricalData = useMemo(
+    () => debounce(loadHistoricalData, 500),
+    [loadHistoricalData],
+  );
+
+  // Use debounced version in effect
   useEffect(() => {
-    loadHistoricalData();
-  }, [timeRange, dateMode, specificDate]);
+    debouncedLoadHistoricalData();
+  }, [timeRange, dateMode, specificDate, customStartDate, customEndDate]);
 
   useEffect(() => {
     if (selectedSensor) {
       loadSensorStatistics(selectedSensor);
     }
-  }, [selectedSensor]);
+  }, [selectedSensor, historicalData]);
 
   const handleExportData = () => {
     const filteredData = historicalData.filter(
       (row) => row.micro_id === selectedSensor,
     );
-    const periodLabel =
-      dateMode === "range"
-        ? timeRange === "1h"
-          ? "1h"
-          : timeRange === "5h"
-            ? "5h"
-            : timeRange === "24h"
-              ? "24h"
-              : timeRange === "7d"
-                ? "7d"
-                : "30d"
-        : specificDate;
+    let periodLabel = "";
+
+    if (dateMode === "range") {
+      periodLabel = timeRange;
+    } else if (dateMode === "specific") {
+      periodLabel = specificDate;
+    } else if (dateMode === "custom") {
+      periodLabel = `${customStartDate}_to_${customEndDate}`;
+    }
 
     const csvContent = [
       [
@@ -204,6 +318,16 @@ const HistoricalPage = () => {
               >
                 Fecha Específica
               </button>
+              <button
+                onClick={() => setDateMode("custom")}
+                className={`px-3 py-1.5 sm:px-4 sm:py-2 text-sm sm:text-base rounded-lg transition-colors ${
+                  dateMode === "custom"
+                    ? "bg-accent-500 text-white"
+                    : "bg-primary-100 text-primary-700 hover:bg-primary-200"
+                }`}
+              >
+                Rango Custom
+              </button>
             </div>
           </div>
 
@@ -265,6 +389,39 @@ const HistoricalPage = () => {
                 </div>
                 <div className="text-xs text-primary-500 mt-1">
                   Se mostrarán datos del día completo seleccionado
+                </div>
+              </div>
+            )}
+
+            {/* Rango custom (solo visible en modo custom) */}
+            {dateMode === "custom" && (
+              <div className="space-y-2">
+                <label className="flex items-center space-x-1 sm:space-x-2 text-sm font-medium">
+                  <CalendarDays className="h-3 w-3 sm:h-4 sm:w-4 text-primary-600" />
+                  <span>Rango de Fechas</span>
+                </label>
+                <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-2">
+                  <div className="flex flex-col">
+                    <span className="text-xs text-primary-500 mb-1">Desde</span>
+                    <input
+                      type="date"
+                      value={customStartDate}
+                      onChange={(e) => setCustomStartDate(e.target.value)}
+                      className="px-2 py-1.5 sm:px-3 sm:py-2 border border-primary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent text-sm sm:text-base"
+                    />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-xs text-primary-500 mb-1">Hasta</span>
+                    <input
+                      type="date"
+                      value={customEndDate}
+                      onChange={(e) => setCustomEndDate(e.target.value)}
+                      className="px-2 py-1.5 sm:px-3 sm:py-2 border border-primary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent text-sm sm:text-base"
+                    />
+                  </div>
+                </div>
+                <div className="text-xs text-primary-500 mt-1">
+                  Selecciona un rango de fechas específico para consultar
                 </div>
               </div>
             )}
@@ -409,7 +566,8 @@ const HistoricalPage = () => {
           </div>
         ) : (
           <div className="text-center py-6 sm:py-8 text-primary-500">
-            No hay datos para el sensor {selectedSensor} en el período seleccionado
+            No hay datos para el sensor {selectedSensor} en el período
+            seleccionado
           </div>
         )}
       </div>
@@ -447,9 +605,11 @@ const HistoricalPage = () => {
           <div className="text-center py-12 text-primary-600">
             No hay datos históricos disponibles para el período seleccionado
           </div>
-        ) : historicalData.filter((row) => row.micro_id === selectedSensor).length === 0 ? (
+        ) : historicalData.filter((row) => row.micro_id === selectedSensor)
+            .length === 0 ? (
           <div className="text-center py-12 text-primary-600">
-            No hay datos para el sensor {selectedSensor} en el período seleccionado
+            No hay datos para el sensor {selectedSensor} en el período
+            seleccionado
           </div>
         ) : (
           <div className="overflow-x-auto -mx-4 sm:mx-0">

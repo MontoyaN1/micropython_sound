@@ -939,40 +939,162 @@ const EpicenterZone = ({
     epicenter_full: epicenter,
   });
 
-  if (!showEpicenter || !epicenter || epicenter.zone_type !== "circle") {
+  // Soportar tanto "triangle" como "circle" para compatibilidad con datos existentes
+  const isTriangleZone = epicenter?.zone_type === "triangle";
+  const isCircleZone = epicenter?.zone_type === "circle";
+
+  if (!showEpicenter || !epicenter) {
     console.log("EpicenterZone - No se renderiza porque:", {
       showEpicenter,
       has_epicenter: !!epicenter,
-      zone_type: epicenter?.zone_type,
-      fails_showEpicenter: !showEpicenter,
-      fails_epicenter: !epicenter,
-      fails_zone_type: epicenter && epicenter.zone_type !== "circle",
+    });
+    return null;
+  }
+
+  // Si no es zona triangular ni circular, no renderizar
+  if (!isTriangleZone && !isCircleZone) {
+    console.log("EpicenterZone - No se renderiza: zone_type no soportado", {
+      zone_type: epicenter.zone_type,
     });
     return null;
   }
 
   console.log("EpicenterZone - Datos de zona:", {
+    zone_type: epicenter.zone_type,
     zone_center_longitude: epicenter.zone_center_longitude,
     zone_center_latitude: epicenter.zone_center_latitude,
     zone_radius: epicenter.zone_radius,
+    zone_vertices: epicenter.zone_vertices,
     top_sensors_count: epicenter.top_sensors ? epicenter.top_sensors.length : 0,
     top_sensors: epicenter.top_sensors,
   });
 
+  // Convertir centro de zona a píxeles
   const center = tilesToPixels(
     epicenter.zone_center_longitude,
     epicenter.zone_center_latitude,
   );
+
+  console.log("EpicenterZone - Centro en píxeles:", center);
 
   // Usar dimensiones actuales de visualización
   const displayWidth = displayDimensions.width || PLAN_IMAGE_WIDTH;
   const displayHeight = displayDimensions.height || PLAN_IMAGE_HEIGHT;
   const scaleX = displayWidth / PLAN_IMAGE_WIDTH;
   const scaleY = displayHeight / PLAN_IMAGE_HEIGHT;
-
   const avgPixelsPerTile =
     (TILES_TO_PIXELS * scaleX + TILES_TO_PIXELS * scaleY) / 2;
 
+  // Renderizado para zona TRIANGULAR
+  if (isTriangleZone && epicenter.zone_vertices) {
+    // Convertir vértices a coordenadas de píxeles
+    const vertexPixels = epicenter.zone_vertices.map((v) => {
+      const px = tilesToPixels(v[0], v[1]);
+      console.log(
+        `EpicenterZone - Vértice [${v[0]}, ${v[1]}] -> píxeles [${px.x}, ${px.y}]`,
+      );
+      return px;
+    });
+
+    // Usar el epicentro calculado (latitude/longitude) como punto central
+    // ya que es el punto óptimo determinado por el algoritmo
+    const epicenterPoint = tilesToPixels(
+      epicenter.longitude,
+      epicenter.latitude,
+    );
+
+    console.log(
+      "EpicenterZone - Triángulo renderizado con vértices:",
+      vertexPixels,
+    );
+    console.log("EpicenterZone - Punto epicentro:", {
+      x: epicenterPoint.x,
+      y: epicenterPoint.y,
+    });
+
+    return (
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{ zIndex: 15 }}
+      >
+        {/* Triángulo fill */}
+        <svg
+          className="absolute inset-0 w-full h-full"
+          style={{ overflow: "visible" }}
+        >
+          {/* Triángulo de zona */}
+          <polygon
+            points={vertexPixels.map((p) => `${p.x},${p.y}`).join(" ")}
+            fill="rgba(220, 38, 38, 0.15)"
+            stroke="rgba(153, 27, 27, 0.8)"
+            strokeWidth="3"
+            strokeLinejoin="round"
+          />
+        </svg>
+
+        {/* Punto central (epicentro aproximado) */}
+        <div
+          className="absolute w-6 h-6 rounded-full bg-red-600 border-2 border-white shadow-lg"
+          style={{
+            left: `${epicenterPoint.x}px`,
+            top: `${epicenterPoint.y}px`,
+            transform: "translate(-50%, -50%)",
+            boxShadow: "0 0 10px rgba(220, 38, 38, 0.8)",
+            zIndex: 16,
+          }}
+        >
+          <div className="absolute inset-0 rounded-full bg-red-500 animate-ping opacity-75"></div>
+        </div>
+
+        {/* Labels de sensores en los vértices */}
+        {epicenter.top_sensors &&
+          epicenter.top_sensors.map((sensor, idx) => {
+            const vPos = vertexPixels[idx] || vertexPixels[0];
+            return (
+              <div
+                key={sensor.micro_id}
+                className="absolute text-xs bg-red-600 text-white px-1.5 py-0.5 rounded font-medium"
+                style={{
+                  left: `${vPos.x}px`,
+                  top: `${vPos.y - 20}px`,
+                  transform: "translate(-50%, 0)",
+                  zIndex: 17,
+                }}
+              >
+                {sensor.micro_id}
+              </div>
+            );
+          })}
+
+        {/* Líneas desde el epicentro hasta los sensores */}
+        {epicenter.top_sensors &&
+          epicenter.top_sensors.map((sensor, idx) => {
+            const vPos = vertexPixels[idx] || vertexPixels[0];
+            const dx = epicenterPoint.x - vPos.x;
+            const dy = epicenterPoint.y - vPos.y;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+            return (
+              <div
+                key={`line-${sensor.micro_id}`}
+                className="absolute bg-red-400"
+                style={{
+                  left: `${vPos.x}px`,
+                  top: `${vPos.y}px`,
+                  width: `${length}px`,
+                  height: "2px",
+                  transform: `translate(0, -50%) rotate(${angle}deg)`,
+                  transformOrigin: "0 50%",
+                  opacity: 0.6,
+                }}
+              />
+            );
+          })}
+      </div>
+    );
+  }
+
+  // Renderizado para zona CIRCULAR (código original para compatibilidad)
   // Limitar centro para que esté dentro del plano (0-57 baldosas, 0-66 baldosas)
   const centerX = Math.max(
     0,
@@ -987,11 +1109,13 @@ const EpicenterZone = ({
   const MAX_RADIUS_TILES = 7;
 
   // Aplicar factor de escala al radio original antes de limitar
-  const scaledRadiusTiles = Math.min(epicenter.zone_radius * 0.5, MAX_RADIUS_TILES);
+  const scaledRadiusTiles = epicenter.zone_radius
+    ? Math.min(epicenter.zone_radius * 0.5, MAX_RADIUS_TILES)
+    : 3;
 
   // Limitar radio para que no exceda los bordes del plano
-  const maxRadiusX = Math.min(centerX, PLAN_WIDTH_TILES - centerX); // distancia a bordes horizontales
-  const maxRadiusY = Math.min(centerY, PLAN_HEIGHT_TILES - centerY); // distancia a bordes verticales
+  const maxRadiusX = Math.min(centerX, PLAN_WIDTH_TILES - centerX);
+  const maxRadiusY = Math.min(centerY, PLAN_HEIGHT_TILES - centerY);
   const maxRadiusTiles = Math.min(maxRadiusX, maxRadiusY);
   const limitedRadiusTiles = Math.min(scaledRadiusTiles, maxRadiusTiles);
 
@@ -1001,7 +1125,7 @@ const EpicenterZone = ({
 
   const radiusPixels = finalRadiusTiles * avgPixelsPerTile;
 
-  console.log("EpicenterZone - Cálculos de visualización:", {
+  console.log("EpicenterZone - Cálculos de visualización (círculo):", {
     TILES_TO_PIXELS,
     avgPixelsPerTile,
     centerX,
@@ -1018,7 +1142,7 @@ const EpicenterZone = ({
     center_pixels: center,
   });
 
-  console.log("EpicenterZone - Renderizando zona epicentro");
+  console.log("EpicenterZone - Renderizando zona epicentro (círculo)");
 
   return (
     <div
@@ -1035,6 +1159,17 @@ const EpicenterZone = ({
           height: `${radiusPixels * 2}px`,
           transform: "translate(-50%, -50%)",
           boxShadow: "0 0 20px rgba(220, 38, 38, 0.5)",
+        }}
+      />
+
+      {/* Punto central del epicentro */}
+      <div
+        className="absolute w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-lg"
+        style={{
+          left: `${center.x}px`,
+          top: `${center.y}px`,
+          transform: "translate(-50%, -50%)",
+          boxShadow: "0 0 10px rgba(220, 38, 38, 0.8)",
         }}
       />
 

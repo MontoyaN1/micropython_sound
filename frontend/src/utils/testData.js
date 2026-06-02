@@ -106,10 +106,12 @@ export const testIdwData = {
   calculated_at: new Date().toISOString(),
 };
 
-// Epicentro extendido de prueba con zona y top sensores
+// Epicentro extendido de prueba con zona triangular
+// El triángulo se forma entre los 3 sensores de mayor valor
+// vertices: [longitude, latitude] de cada sensor top
 export const testEpicenter = {
-  latitude: 6.5,
-  longitude: 2.5,
+  latitude: 6.0, // epicentro_y calculado (promedio de los 3 sensores)
+  longitude: 2.5, // epicentro_x calculado
   max_sensor_latitude: 5.0, // E255 (mayor valor)
   max_sensor_longitude: 3.5,
   max_value: 60.5,
@@ -142,9 +144,13 @@ export const testEpicenter = {
       location_name: "Exterior 2",
     },
   ],
-  zone_type: "circle",
-  zone_radius: 5.675, // distancia máxima + 0.5m margen
+  zone_type: "triangle", // Cambiado de "circle" a "triangle"
   zone_center_latitude: 6.0, // promedio latitudes top sensores
   zone_center_longitude: 2.833, // promedio longitudes top sensores
-  zone_vertices: null,
+  zone_vertices: [
+    [3.5, 5.0], // E255: [longitude, latitude]
+    [1.5, 11.0], // E4: [longitude, latitude]
+    [3.5, 2.0], // E2: [longitude, latitude]
+  ],
+  zone_radius: null, // No aplica para triángulo
 };

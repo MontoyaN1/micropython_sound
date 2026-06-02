@@ -29,6 +29,12 @@ fi
 # Siempre usar .env (compatible con EasyPanel)
 ENV_FILE=".env"
 
+# Configuración de logs (estilo Minecraft)
+LOG_DIR="${LOG_DIR:-./logs}"
+LOG_MAX_SIZE_MB=${LOG_MAX_SIZE_MB:-10}
+LOG_MAX_FILES=${LOG_MAX_FILES:-5}
+mkdir -p "$LOG_DIR"
+
 # Determinar si usar nginx en desarrollo
 if [ "$ENVIRONMENT" = "dev" ] && [ "$3" = "true" ]; then
     NGINX_DEV_ENABLED=true
@@ -452,18 +458,151 @@ show_status() {
     fi
 }
 
+# Función principal para manejar comandos de logs (evita local fuera de función)
+handle_logs_command() {
+    local log_subcommand="${1:-show}"
+    local log_param="${2:-}"
+    local log_third="${3:-}"
+
+    # Determinar servicio y líneas según el subcomando
+    local log_service=""
+    local log_lines="100"
+
+    case "$log_subcommand" in
+        show)
+            log_service="$log_param"
+            show_logs "$COMPOSE_FILE" "$log_service"
+            ;;
+        last|recent)
+            # Si log_param es numérico, es el número de líneas, si no es el servicio
+            if [[ "$log_param" =~ ^[0-9]+$ ]]; then
+                log_lines="$log_param"
+                # log_third sería el servicio si se pasó
+                log_service="$log_third"
+            else
+                log_service="$log_param"
+                log_lines="${log_third:-100}"
+            fi
+            view_recent_logs "$log_service" "$log_lines"
+            ;;
+        list)
+            list_logs
+            ;;
+        clean)
+            clean_old_logs
+            ;;
+        *)
+            print_info "Uso: $0 logs [show|last|list|clean] [servicio] [líneas]"
+            echo
+            echo "  show    - Mostrar logs en tiempo real y guardar (por defecto)"
+            echo "  last    - Ver últimos logs guardados"
+            echo "  list    - Listar archivos de log disponibles"
+            echo "  clean   - Limpiar logs antiguos"
+            echo
+            echo "  Ejemplos:"
+            echo "    $0 logs show           # Ver todos los logs en tiempo real"
+            echo "    $0 logs show backend   # Ver logs del backend"
+            echo "    $0 logs last           # Ver últimos 100 líneas guardadas"
+            echo "    $0 logs last backend   # Ver últimos logs del backend"
+            echo "    $0 logs last 50        # Ver últimas 50 líneas"
+            echo "    $0 logs last 50 backend  # Ver últimas 50 líneas del backend"
+            echo "    $0 logs list           # Listar archivos"
+            echo "    $0 logs clean          # Limpiar logs antiguos"
+            ;;
+    esac
+}
+
 show_logs() {
     local compose_file="$1"
     local service="$2"
+    local timestamp
+    timestamp=$(date +"%Y-%m-%d_%H-%M-%S")
 
-    print_header "Mostrando logs"
+    print_header "Mostrando/M guardando logs"
+
+    # Función interna para rotar logs si es necesario
+    rotate_logs_if_needed() {
+        local log_file="$1"
+        if [ -f "$log_file" ]; then
+            local size_mb
+            size_mb=$(du -m "$log_file" 2>/dev/null | cut -f1 || echo "0")
+            if [ "$size_mb" -ge "$LOG_MAX_SIZE_MB" ]; then
+                mv "$log_file" "${log_file}.old"
+                # Comprimir el archivo antiguo
+                gzip -9 "${log_file}.old" &
+            fi
+        fi
+    }
 
     if [ -z "$service" ]; then
-        print_info "Mostrando logs de todos los servicios (Ctrl+C para salir)"
-        docker-compose -f "$compose_file" logs -f
+        local current_log="$LOG_DIR/${ENVIRONMENT}_all_${timestamp}.log"
+        print_info "Guardando logs en: $current_log"
+        print_info "Mostrando en tiempo real (Ctrl+C para salir)..."
+        docker-compose -f "$compose_file" logs -f --timestamps 2>&1 | tee "$current_log"
     else
-        print_info "Mostrando logs de $service (Ctrl+C para salir)"
-        docker-compose -f "$compose_file" logs -f "$service"
+        local current_log="$LOG_DIR/${ENVIRONMENT}_${service}_${timestamp}.log"
+        print_info "Guardando logs en: $current_log"
+        print_info "Mostrando logs de $service en tiempo real (Ctrl+C para salir)..."
+        docker-compose -f "$compose_file" logs -f "$service" --timestamps 2>&1 | tee "$current_log"
+    fi
+}
+
+# Función para ver últimos logs guardados (sin seguir)
+view_recent_logs() {
+    local service="${1:-all}"
+    local lines="${2:-100}"
+
+    print_header "Últimos logs guardados"
+
+    if [ "$service" = "all" ]; then
+        local latest_log
+        latest_log=$(ls -t "$LOG_DIR"/*.log 2>/dev/null | head -1)
+        if [ -n "$latest_log" ]; then
+            print_info "Mostrando últimas $lines líneas de: $latest_log"
+            tail -n "$lines" "$latest_log"
+        else
+            print_warning "No hay logs guardados"
+        fi
+    else
+        local latest_log
+        latest_log=$(ls -t "$LOG_DIR"/${ENVIRONMENT}_${service}_*.log 2>/dev/null | head -1)
+        if [ -n "$latest_log" ]; then
+            print_info "Mostrando últimas $lines líneas de: $latest_log"
+            tail -n "$lines" "$latest_log"
+        else
+            print_warning "No hay logs guardados para el servicio: $service"
+        fi
+    fi
+}
+
+# Función para listar archivos de log disponibles
+list_logs() {
+    print_header "Archivos de log disponibles"
+
+    if ls "$LOG_DIR"/*.log* &>/dev/null; then
+        echo
+        ls -lh "$LOG_DIR"/*.log* 2>/dev/null | tail -20
+        echo
+        print_info "Ubicación: $LOG_DIR"
+    else
+        print_warning "No hay archivos de log"
+    fi
+}
+
+# Función para limpiar logs antiguos
+clean_old_logs() {
+    print_header "Limpiando logs antiguos"
+
+    # Contar archivos
+    local total_logs
+    total_logs=$(ls "$LOG_DIR"/*.log* 2>/dev/null | wc -l)
+
+    if [ "$total_logs" -gt "$LOG_MAX_FILES" ]; then
+        print_info "Eliminando logs antiguos (manteniendo últimos $LOG_MAX_FILES)..."
+        ls -t "$LOG_DIR"/*.log* 2>/dev/null | tail -n +$((LOG_MAX_FILES + 1)) | xargs rm -f 2>/dev/null
+        print_success "Limpieza completada"
+    else
+        print_info "No hay logs antiguos que eliminar"
     fi
 }
 
@@ -574,12 +713,26 @@ Comandos disponibles:
   stop         Detener todos los servicios
   restart      Reiniciar todos los servicios
   status       Mostrar estado de los servicios
-  logs [servicio] Mostrar logs (todos o de un servicio específico)
+  logs         Sistema de logs (ver abajo para subcomandos)
   build        Construir imágenes Docker
   update       Actualizar sistema (rebuild)
   backup       Crear backup de configuración
   cleanup      Limpiar contenedores, imágenes y volúmenes no utilizados
   help         Mostrar esta ayuda
+
+Subcomandos de logs:
+  logs show [servicio]   - Mostrar logs en tiempo real y guardar en ./logs/
+  logs last [servicio] [n] - Ver últimos n líneas de logs guardados (default: 100)
+  logs list             - Listar archivos de log disponibles
+  logs clean            - Limpiar logs antiguos (mantiene últimos $LOG_MAX_FILES)
+
+  Ejemplos:
+    ./deploy.sh logs show           # Ver todos los logs en tiempo real
+    ./deploy.sh logs show backend   # Ver logs del backend
+    ./deploy.sh logs last           # Ver últimos 100 líneas guardadas
+    ./deploy.sh logs last backend 50  # Ver últimas 50 líneas del backend
+    ./deploy.sh logs list           # Listar archivos de log
+    ./deploy.sh logs clean          # Limpiar logs antiguos
 
 Entornos disponibles:
   dev          Desarrollo (por defecto) - usa docker-compose.yml
@@ -609,9 +762,12 @@ Ejemplos:
   ./deploy.sh start dev true # Iniciar desarrollo con nginx (para usar /api)
   ./deploy.sh dev true       # Iniciar desarrollo con nginx (hot reload)
   ./deploy.sh start prod     # Iniciar producción (con nginx)
-  ./deploy.sh logs backend   # Ver logs del backend
+  ./deploy.sh logs show backend  # Ver logs del backend en tiempo real
+  ./deploy.sh logs last backend  # Ver últimos logs guardados del backend
   ./deploy.sh status prod    # Ver estado de producción
   ./deploy.sh cleanup        # Limpiar recursos Docker
+
+Ubicación de logs: ./logs/ (configurable con LOG_DIR)
 
 Accesos después del despliegue:
   Desarrollo local (sin nginx):
@@ -666,7 +822,7 @@ case "${1:-help}" in
         ;;
     logs)
         check_dependencies
-        show_logs "$COMPOSE_FILE" "$3"
+        handle_logs_command "$2" "$3" "$4"
         ;;
     build)
     check_dependencies
