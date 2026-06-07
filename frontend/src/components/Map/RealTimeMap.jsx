@@ -9,53 +9,11 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet.heat";
-import { Activity, Volume2, MapPin, Target } from "lucide-react";
+import { Activity, Volume2, MapPin, Target, Triangle } from "lucide-react";
+import TriangulationLayer from "./TriangulationLayer";
 
 const DEFAULT_CENTER = [4.60971, -74.081749]; // Bogotá
 const DEFAULT_ZOOM = 14;
-
-// Iconos personalizados
-const createSensorIcon = (value) => {
-  let colorClass = "green";
-  let borderClass = "border-green-500";
-  let textClass = "text-green-500";
-  let bgClass = "bg-green-500";
-
-  if (value >= 85) {
-    colorClass = "red";
-    borderClass = "border-red-500";
-    textClass = "text-red-500";
-    bgClass = "bg-red-500";
-  } else if (value >= 70) {
-    colorClass = "orange";
-    borderClass = "border-orange-500";
-    textClass = "text-orange-500";
-    bgClass = "bg-orange-500";
-  } else if (value >= 50) {
-    colorClass = "yellow";
-    borderClass = "border-yellow-500";
-    textClass = "text-yellow-500";
-    bgClass = "bg-yellow-500";
-  }
-
-  return L.divIcon({
-    html: `
-      <div class="relative">
-        <div class="w-8 h-8 rounded-full bg-white border-2 ${borderClass} flex items-center justify-center shadow-lg">
-          <svg class="w-4 h-4 ${textClass}" fill="currentColor" viewBox="0 0 20 20">
-            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v3.586L7.707 9.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 10.586V7z" clip-rule="evenodd"/>
-          </svg>
-        </div>
-        <div class="absolute -top-2 -right-2 ${bgClass} text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
-          ${Math.round(value)}
-        </div>
-      </div>
-    `,
-    className: "",
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
-  });
-};
 
 const createEpicenterIcon = () => {
   return L.divIcon({
@@ -153,6 +111,7 @@ const RealTimeMap = ({ sensorData, idwData, epicenter }) => {
   const mapRef = useRef(null);
   const [showHeatmap, setShowHeatmap] = useState(true);
   const [showEpicenter, setShowEpicenter] = useState(true);
+  const [showTriangulation, setShowTriangulation] = useState(true);
 
   const handleMapCreated = (map) => {
     mapRef.current = map;
@@ -186,6 +145,19 @@ const RealTimeMap = ({ sensorData, idwData, epicenter }) => {
             <label className="flex items-center space-x-2 cursor-pointer">
               <input
                 type="checkbox"
+                checked={showTriangulation}
+                onChange={(e) => setShowTriangulation(e.target.checked)}
+                className="rounded text-accent-500"
+              />
+              <span className="text-sm font-medium">Triangulación</span>
+            </label>
+            <Triangle className="h-4 w-4 text-gray-500" />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <label className="flex items-center space-x-2 cursor-pointer">
+              <input
+                type="checkbox"
                 checked={showEpicenter}
                 onChange={(e) => setShowEpicenter(e.target.checked)}
                 className="rounded text-accent-500"
@@ -204,7 +176,7 @@ const RealTimeMap = ({ sensorData, idwData, epicenter }) => {
           <div className="space-y-1 text-xs">
             <div className="flex items-center space-x-2">
               <div className="w-3 h-3 rounded-full bg-green-500"></div>
-              <span>&lt; 50 dB (Bajo)</span>
+              <span>< 50 dB (Bajo)</span>
             </div>
             <div className="flex items-center space-x-2">
               <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
@@ -216,7 +188,7 @@ const RealTimeMap = ({ sensorData, idwData, epicenter }) => {
             </div>
             <div className="flex items-center space-x-2">
               <div className="w-3 h-3 rounded-full bg-red-500"></div>
-              <span>&gt; 85 dB (Crítico)</span>
+              <span>> 85 dB (Crítico)</span>
             </div>
           </div>
         </div>
@@ -235,58 +207,11 @@ const RealTimeMap = ({ sensorData, idwData, epicenter }) => {
 
         {showHeatmap && idwData && <HeatmapLayer idwData={idwData} />}
 
-        <MapBoundsUpdater sensors={sensorData} />
+        {showTriangulation && (
+          <TriangulationLayer sensors={sensorData} epicenter={epicenter} />
+        )}
 
-        {sensorData.map((sensor) => (
-          <Marker
-            key={sensor.micro_id}
-            position={[sensor.latitude, sensor.longitude]}
-            icon={createSensorIcon(sensor.value)}
-          >
-            <Popup>
-              <div className="p-2">
-                <div className="flex items-center space-x-2 mb-2">
-                  <MapPin className="h-4 w-4 text-accent-500" />
-                  <h3 className="font-bold">{sensor.location_name}</h3>
-                </div>
-                <div className="space-y-1">
-                  <div className="flex justify-between">
-                    <span className="text-primary-600">ID:</span>
-                    <span className="font-medium">{sensor.micro_id}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-primary-600">Nivel:</span>
-                    <span
-                      className={`font-bold ${
-                        sensor.value >= 85
-                          ? "text-red-600"
-                          : sensor.value >= 70
-                            ? "text-orange-600"
-                            : sensor.value >= 50
-                              ? "text-yellow-600"
-                              : "text-green-600"
-                      }`}
-                    >
-                      {sensor.value.toFixed(1)} dB
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-primary-600">Actualizado:</span>
-                    <span className="text-sm">
-                      {(() => {
-                        const date = new Date(sensor.last_update);
-                        date.setHours(date.getHours() - 5);
-                        return date.toLocaleTimeString("es-CO", {
-                          hour12: false,
-                        });
-                      })()}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
+        <MapBoundsUpdater sensors={sensorData} />
 
         {showEpicenter && epicenter && (
           <Marker

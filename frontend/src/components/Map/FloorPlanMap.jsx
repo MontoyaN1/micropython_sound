@@ -233,7 +233,7 @@ const SensorMarker = ({
         left: `${x}px`,
         top: `${y}px`,
         transform: "translate(-50%, -50%)",
-        zIndex: showPopup ? 1000 : 10,
+        zIndex: showPopup ? 1000 : 20,
       }}
       onMouseEnter={() => setShowPopup(true)}
       onMouseLeave={() => setShowPopup(false)}
@@ -1045,26 +1045,6 @@ const EpicenterZone = ({
         >
           <div className="absolute inset-0 rounded-full bg-red-500 animate-ping opacity-75"></div>
         </div>
-
-        {/* Labels de sensores en los vértices */}
-        {epicenter.top_sensors &&
-          epicenter.top_sensors.map((sensor, idx) => {
-            const vPos = vertexPixels[idx] || vertexPixels[0];
-            return (
-              <div
-                key={sensor.micro_id}
-                className="absolute text-xs bg-red-600 text-white px-1.5 py-0.5 rounded font-medium"
-                style={{
-                  left: `${vPos.x}px`,
-                  top: `${vPos.y - 20}px`,
-                  transform: "translate(-50%, 0)",
-                  zIndex: 17,
-                }}
-              >
-                {sensor.micro_id}
-              </div>
-            );
-          })}
 
         {/* Líneas desde el epicentro hasta los sensores */}
         {epicenter.top_sensors &&
