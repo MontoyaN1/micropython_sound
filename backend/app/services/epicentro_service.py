@@ -85,24 +85,42 @@ def calculate_epicenter(
 
             top_sensors.append(sensor_data)
 
-        # Calcular zona circular basada en los 3 sensores con mayor ruido
+        # Calcular zona triangular basada en los 3 sensores con mayor ruido
         zone_center_x = 0.0
         zone_center_y = 0.0
-        zone_radius = 0.0
+        zone_vertices = None
 
-        if len(top_x) > 0:
-            # Centro de zona: promedio de coordenadas de los top sensores
+        if len(top_x) >= 3:
+            # Los 3 sensores top definen el triángulo
+            zone_vertices = [
+                [float(top_x[0]), float(top_y[0])],  # Sensor 1
+                [float(top_x[1]), float(top_y[1])],  # Sensor 2
+                [float(top_x[2]), float(top_y[2])],  # Sensor 3
+            ]
+            # Centroides del triángulo (punto central)
             zone_center_x = float(np.mean(top_x))
             zone_center_y = float(np.mean(top_y))
-
-            # Radio: distancia máxima desde el centro a cualquier sensor top, más margen
-            distances = np.sqrt(
-                (top_x - zone_center_x) ** 2 + (top_y - zone_center_y) ** 2
-            )
-            if len(distances) > 0:
-                zone_radius = float(np.max(distances)) + 0.2  # +0.2 metros de margen
-            else:
-                zone_radius = 1.0  # Radio por defecto
+        elif len(top_x) == 2:
+            # Si hay solo 2 sensores, crear triángulo虚拟 con el tercero
+            zone_vertices = [
+                [float(top_x[0]), float(top_y[0])],
+                [float(top_x[1]), float(top_y[1])],
+                [
+                    float((top_x[0] + top_x[1]) / 2),
+                    float((top_y[0] + top_y[1]) / 2 + 1),
+                ],  # Punto虚拟
+            ]
+            zone_center_x = float(np.mean(top_x))
+            zone_center_y = float(np.mean(top_y))
+        else:
+            # Solo 1 sensor
+            zone_vertices = [
+                [float(top_x[0]), float(top_y[0])],
+                [float(top_x[0]) + 0.5, float(top_y[0])],
+                [float(top_x[0]), float(top_y[0]) + 0.5],
+            ]
+            zone_center_x = float(top_x[0])
+            zone_center_y = float(top_y[0])
 
         # Construir respuesta con todos los campos extendidos
         result = {
@@ -115,11 +133,11 @@ def calculate_epicenter(
             "calculated_at": datetime.now().isoformat(),
             # Campos extendidos para zona epicentral
             "top_sensors": top_sensors,
-            "zone_type": "circle",
-            "zone_radius": zone_radius,
+            "zone_type": "triangle",
             "zone_center_latitude": zone_center_y,
             "zone_center_longitude": zone_center_x,
-            "zone_vertices": None,  # No necesario para círculo
+            "zone_vertices": zone_vertices,
+            "zone_radius": None,  # No aplica para triángulo
         }
 
         logger.info(
@@ -157,11 +175,15 @@ def calculate_epicenter(
                         "rank": 1,
                     }
                 ],
-                "zone_type": "circle",
-                "zone_radius": 1.0,
+                "zone_type": "triangle",
                 "zone_center_latitude": float(y[max_idx]),
                 "zone_center_longitude": float(x[max_idx]),
-                "zone_vertices": None,
+                "zone_vertices": [
+                    [float(x[max_idx]), float(y[max_idx])],
+                    [float(x[max_idx]) + 0.5, float(y[max_idx])],
+                    [float(x[max_idx]), float(y[max_idx]) + 0.5],
+                ],
+                "zone_radius": None,
             }
         except Exception as e2:
             logger.error(f"Error en fallback de epicentro: {e2}")

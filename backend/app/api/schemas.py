@@ -100,6 +100,21 @@ class CurrentState(BaseModel):
     sensor_count: int
 
 
+class StatisticsQuery(BaseModel):
+    """Parámetros para consulta de estadísticas"""
+
+    start_time: datetime = Field(..., description="Tiempo de inicio (ISO 8601)")
+    end_time: Optional[datetime] = Field(
+        None, description="Tiempo de fin (ISO 8601), default ahora"
+    )
+    micro_ids: Optional[List[str]] = Field(
+        None, description="Lista de micro IDs a filtrar"
+    )
+    aggregation_window: str = Field(
+        "1m", description="Ventana de agregación (10s, 1m, 5m, 1h, etc.)"
+    )
+
+
 class StatisticsResponse(BaseModel):
     """Estadísticas de un sensor"""
 
@@ -111,6 +126,9 @@ class StatisticsResponse(BaseModel):
     max: float
     std: float
     data_points: List[HistoricalData]
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    aggregation_window: Optional[str] = None
 
 
 class HealthResponse(BaseModel):

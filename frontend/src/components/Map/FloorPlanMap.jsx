@@ -114,6 +114,168 @@ const getColorFromPalette = (paletteName, normalizedValue, opacity = 1.0) => {
 };
 
 // Componente de sensor para plano interior
+// Zonas fijas de triangulación (hexágono centrado en E5)
+// Cada zona es un triángulo definido por 3 sensores [sensor1, sensor2, sensor3]
+const FIXED_ZONES = [
+  { id: 1, sensors: ["E1", "E5", "E3"] }, // Zona 1
+  { id: 2, sensors: ["E3", "E5", "E6"] }, // Zona 2
+  { id: 3, sensors: ["E6", "E5", "E8"] }, // Zona 3
+  { id: 4, sensors: ["E8", "E5", "E7"] }, // Zona 4
+  { id: 5, sensors: ["E7", "E5", "E4"] }, // Zona 5
+  { id: 6, sensors: ["E4", "E5", "E1"] }, // Zona 6
+];
+
+// Coordenadas de sensores en baldosas [x, y] (x=horizontal, y=vertical de arriba)
+const SENSOR_COORDS = {
+  E1: [20, 7],
+  E2: [41, 11],
+  E3: [50, 23],
+  E4: [7, 23],
+  E5: [23, 40],
+  E6: [49, 41],
+  E7: [7, 56],
+  E8: [36, 61],
+  E9: [49, 61],
+};
+
+// Helper para verificar si un punto está dentro de un triángulo (en coordenadas de baldosas)
+const pointInTriangle = (px, py, v0, v1, v2) => {
+  const [x0, y0] = v0;
+  const [x1, y1] = v1;
+  const [x2, y2] = v2;
+
+  const denominator = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2);
+  if (Math.abs(denominator) < 1e-10) return false;
+
+  const a = ((y2 - y1) * (px - x2) + (x1 - x2) * (py - y2)) / denominator;
+  const b = ((y0 - y2) * (px - x2) + (x2 - x0) * (py - y2)) / denominator;
+  const c = 1 - a - b;
+
+  return a >= 0 && a <= 1 && b >= 0 && b <= 1 && c >= 0 && c <= 1;
+};
+
+// Componente para renderizar las zonas fijas de triangulación
+const FixedZones = ({ epicenter, tilesToPixels, sensorData }) => {
+  // Siempre renderizar las zonas (incluso sin epicentro)
+  // Si hay epicentro, encontrar qué zona lo contiene
+  let activeZoneId = null;
+  if (
+    epicenter &&
+    epicenter.longitude !== undefined &&
+    epicenter.latitude !== undefined
+  ) {
+    const epicenterX = epicenter.longitude;
+    const epicenterY = epicenter.latitude;
+
+    // Verificar si el epicentro está exactamente en un sensor
+    let sensorAtEpicenter = null;
+    for (const [sensorId, coords] of Object.entries(SENSOR_COORDS)) {
+      const distance = Math.sqrt(
+        Math.pow(epicenterX - coords[0], 2) +
+          Math.pow(epicenterY - coords[1], 2),
+      );
+      if (distance < 0.5) {
+        // Dentro de 0.5 baldosas del sensor
+        sensorAtEpicenter = sensorId;
+        break;
+      }
+    }
+
+    // Encontrar TODAS las zonas que contienen el epicentro
+    const candidateZones = [];
+    for (const zone of FIXED_ZONES) {
+      const v0 = SENSOR_COORDS[zone.sensors[0]];
+      const v1 = SENSOR_COORDS[zone.sensors[1]];
+      const v2 = SENSOR_COORDS[zone.sensors[2]];
+
+      if (pointInTriangle(epicenterX, epicenterY, v0, v1, v2)) {
+        candidateZones.push(zone);
+      }
+    }
+
+    // Si el epicentro está en un sensor (como E5 que es centro del hexágono)
+    // usar los valores de los sensores para decidir
+    if (candidateZones.length === 0 && sensorAtEpicenter && sensorData) {
+      // Encontrar todas las zonas que incluyen este sensor
+      for (const zone of FIXED_ZONES) {
+        if (zone.sensors.includes(sensorAtEpicenter)) {
+          candidateZones.push(zone);
+        }
+      }
+    }
+
+    // Si hay múltiples zonas candidatas (epicentro en borde o vértice), usar valores de sensores
+    if (candidateZones.length > 1 && sensorData) {
+      // Calcular la suma de valores de sensores en cada zona
+      const zoneScores = candidateZones.map((zone) => {
+        let sum = 0;
+        for (const sensorId of zone.sensors) {
+          const sensor = sensorData.find(
+            (s) =>
+              s.micro_id === sensorId ||
+              s.micro_id === `E${sensorId}` ||
+              s.micro_id === sensorId.replace("E", ""),
+          );
+          if (sensor && sensor.value !== undefined) {
+            sum += sensor.value;
+          }
+        }
+        return { zoneId: zone.id, score: sum };
+      });
+
+      // Ordenar por score y tomar la de mayor valor
+      zoneScores.sort((a, b) => b.score - a.score);
+      activeZoneId = zoneScores[0].zoneId;
+    } else if (candidateZones.length === 1) {
+      activeZoneId = candidateZones[0].id;
+    }
+    // Si no hay zonas candidatas, activeZoneId queda null
+  }
+
+  return (
+    <div
+      className="absolute inset-0 pointer-events-none"
+      style={{ zIndex: 10 }}
+    >
+      <svg
+        width="100%"
+        height="100%"
+        style={{ position: "absolute", top: 0, left: 0 }}
+      >
+        {FIXED_ZONES.map((zone) => {
+          const v0 = SENSOR_COORDS[zone.sensors[0]];
+          const v1 = SENSOR_COORDS[zone.sensors[1]];
+          const v2 = SENSOR_COORDS[zone.sensors[2]];
+
+          // Convertir a píxeles
+          const p0 = tilesToPixels(v0[0], v0[1]);
+          const p1 = tilesToPixels(v1[0], v1[1]);
+          const p2 = tilesToPixels(v2[0], v2[1]);
+
+          const isActive = zone.id === activeZoneId;
+
+          return (
+            <polygon
+              key={zone.id}
+              points={`${p0.x},${p0.y} ${p1.x},${p1.y} ${p2.x},${p2.y}`}
+              fill={
+                isActive
+                  ? "rgba(220, 38, 38, 0.25)"
+                  : "rgba(100, 100, 100, 0.08)"
+              }
+              stroke={
+                isActive ? "rgba(220, 38, 38, 0.8)" : "rgba(150, 150, 150, 0.4)"
+              }
+              strokeWidth={isActive ? 3 : 1.5}
+              strokeLinejoin="round"
+            />
+          );
+        })}
+      </svg>
+    </div>
+  );
+};
+
 const SensorMarker = ({
   x,
   y,
@@ -233,7 +395,7 @@ const SensorMarker = ({
         left: `${x}px`,
         top: `${y}px`,
         transform: "translate(-50%, -50%)",
-        zIndex: showPopup ? 1000 : 10,
+        zIndex: showPopup ? 1000 : 20,
       }}
       onMouseEnter={() => setShowPopup(true)}
       onMouseLeave={() => setShowPopup(false)}
@@ -939,40 +1101,142 @@ const EpicenterZone = ({
     epicenter_full: epicenter,
   });
 
-  if (!showEpicenter || !epicenter || epicenter.zone_type !== "circle") {
+  // Soportar tanto "triangle" como "circle" para compatibilidad con datos existentes
+  const isTriangleZone = epicenter?.zone_type === "triangle";
+  const isCircleZone = epicenter?.zone_type === "circle";
+
+  if (!showEpicenter || !epicenter) {
     console.log("EpicenterZone - No se renderiza porque:", {
       showEpicenter,
       has_epicenter: !!epicenter,
-      zone_type: epicenter?.zone_type,
-      fails_showEpicenter: !showEpicenter,
-      fails_epicenter: !epicenter,
-      fails_zone_type: epicenter && epicenter.zone_type !== "circle",
+    });
+    return null;
+  }
+
+  // Si no es zona triangular ni circular, no renderizar
+  if (!isTriangleZone && !isCircleZone) {
+    console.log("EpicenterZone - No se renderiza: zone_type no soportado", {
+      zone_type: epicenter.zone_type,
     });
     return null;
   }
 
   console.log("EpicenterZone - Datos de zona:", {
+    zone_type: epicenter.zone_type,
     zone_center_longitude: epicenter.zone_center_longitude,
     zone_center_latitude: epicenter.zone_center_latitude,
     zone_radius: epicenter.zone_radius,
+    zone_vertices: epicenter.zone_vertices,
     top_sensors_count: epicenter.top_sensors ? epicenter.top_sensors.length : 0,
     top_sensors: epicenter.top_sensors,
   });
 
+  // Convertir centro de zona a píxeles
   const center = tilesToPixels(
     epicenter.zone_center_longitude,
     epicenter.zone_center_latitude,
   );
+
+  console.log("EpicenterZone - Centro en píxeles:", center);
 
   // Usar dimensiones actuales de visualización
   const displayWidth = displayDimensions.width || PLAN_IMAGE_WIDTH;
   const displayHeight = displayDimensions.height || PLAN_IMAGE_HEIGHT;
   const scaleX = displayWidth / PLAN_IMAGE_WIDTH;
   const scaleY = displayHeight / PLAN_IMAGE_HEIGHT;
-
   const avgPixelsPerTile =
     (TILES_TO_PIXELS * scaleX + TILES_TO_PIXELS * scaleY) / 2;
 
+  // Renderizado para zona TRIANGULAR
+  if (isTriangleZone && epicenter.zone_vertices) {
+    // Convertir vértices a coordenadas de píxeles
+    const vertexPixels = epicenter.zone_vertices.map((v) => {
+      const px = tilesToPixels(v[0], v[1]);
+      console.log(
+        `EpicenterZone - Vértice [${v[0]}, ${v[1]}] -> píxeles [${px.x}, ${px.y}]`,
+      );
+      return px;
+    });
+
+    // Usar el epicentro calculado (latitude/longitude) como punto central
+    // ya que es el punto óptimo determinado por el algoritmo
+    const epicenterPoint = tilesToPixels(
+      epicenter.longitude,
+      epicenter.latitude,
+    );
+
+    console.log(
+      "EpicenterZone - Triángulo renderizado con vértices:",
+      vertexPixels,
+    );
+    console.log("EpicenterZone - Punto epicentro:", {
+      x: epicenterPoint.x,
+      y: epicenterPoint.y,
+    });
+
+    return (
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{ zIndex: 0 }}
+      >
+        {/* Triángulo fill */}
+        <svg
+          className="absolute inset-0 w-full h-full"
+          style={{ overflow: "visible" }}
+        >
+          {/* Triángulo de zona */}
+          <polygon
+            points={vertexPixels.map((p) => `${p.x},${p.y}`).join(" ")}
+            fill="rgba(220, 38, 38, 0.15)"
+            stroke="rgba(153, 27, 27, 0.8)"
+            strokeWidth="3"
+            strokeLinejoin="round"
+          />
+        </svg>
+
+        {/* Punto central (epicentro aproximado) */}
+        <div
+          className="absolute w-6 h-6 rounded-full bg-red-600 border-2 border-white shadow-lg"
+          style={{
+            left: `${epicenterPoint.x}px`,
+            top: `${epicenterPoint.y}px`,
+            transform: "translate(-50%, -50%)",
+            boxShadow: "0 0 10px rgba(220, 38, 38, 0.8)",
+            zIndex: 16,
+          }}
+        >
+          <div className="absolute inset-0 rounded-full bg-red-500 animate-ping opacity-75"></div>
+        </div>
+
+        {/* Líneas desde el epicentro hasta los sensores */}
+        {epicenter.top_sensors &&
+          epicenter.top_sensors.map((sensor, idx) => {
+            const vPos = vertexPixels[idx] || vertexPixels[0];
+            const dx = epicenterPoint.x - vPos.x;
+            const dy = epicenterPoint.y - vPos.y;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+            return (
+              <div
+                key={`line-${sensor.micro_id}`}
+                className="absolute bg-red-400"
+                style={{
+                  left: `${vPos.x}px`,
+                  top: `${vPos.y}px`,
+                  width: `${length}px`,
+                  height: "2px",
+                  transform: `translate(0, -50%) rotate(${angle}deg)`,
+                  transformOrigin: "0 50%",
+                  opacity: 0.6,
+                }}
+              />
+            );
+          })}
+      </div>
+    );
+  }
+
+  // Renderizado para zona CIRCULAR (código original para compatibilidad)
   // Limitar centro para que esté dentro del plano (0-57 baldosas, 0-66 baldosas)
   const centerX = Math.max(
     0,
@@ -987,11 +1251,13 @@ const EpicenterZone = ({
   const MAX_RADIUS_TILES = 7;
 
   // Aplicar factor de escala al radio original antes de limitar
-  const scaledRadiusTiles = Math.min(epicenter.zone_radius * 0.5, MAX_RADIUS_TILES);
+  const scaledRadiusTiles = epicenter.zone_radius
+    ? Math.min(epicenter.zone_radius * 0.5, MAX_RADIUS_TILES)
+    : 3;
 
   // Limitar radio para que no exceda los bordes del plano
-  const maxRadiusX = Math.min(centerX, PLAN_WIDTH_TILES - centerX); // distancia a bordes horizontales
-  const maxRadiusY = Math.min(centerY, PLAN_HEIGHT_TILES - centerY); // distancia a bordes verticales
+  const maxRadiusX = Math.min(centerX, PLAN_WIDTH_TILES - centerX);
+  const maxRadiusY = Math.min(centerY, PLAN_HEIGHT_TILES - centerY);
   const maxRadiusTiles = Math.min(maxRadiusX, maxRadiusY);
   const limitedRadiusTiles = Math.min(scaledRadiusTiles, maxRadiusTiles);
 
@@ -1001,7 +1267,7 @@ const EpicenterZone = ({
 
   const radiusPixels = finalRadiusTiles * avgPixelsPerTile;
 
-  console.log("EpicenterZone - Cálculos de visualización:", {
+  console.log("EpicenterZone - Cálculos de visualización (círculo):", {
     TILES_TO_PIXELS,
     avgPixelsPerTile,
     centerX,
@@ -1018,13 +1284,10 @@ const EpicenterZone = ({
     center_pixels: center,
   });
 
-  console.log("EpicenterZone - Renderizando zona epicentro");
+  console.log("EpicenterZone - Renderizando zona epicentro (círculo)");
 
   return (
-    <div
-      className="absolute inset-0 pointer-events-none"
-      style={{ zIndex: 15 }}
-    >
+    <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 0 }}>
       {/* Zona epicentro principal */}
       <div
         className="absolute rounded-full border-4 border-red-800/70 bg-red-900/20"
@@ -1035,6 +1298,17 @@ const EpicenterZone = ({
           height: `${radiusPixels * 2}px`,
           transform: "translate(-50%, -50%)",
           boxShadow: "0 0 20px rgba(220, 38, 38, 0.5)",
+        }}
+      />
+
+      {/* Punto central del epicentro */}
+      <div
+        className="absolute w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-lg"
+        style={{
+          left: `${center.x}px`,
+          top: `${center.y}px`,
+          transform: "translate(-50%, -50%)",
+          boxShadow: "0 0 10px rgba(220, 38, 38, 0.8)",
         }}
       />
 
@@ -1859,6 +2133,13 @@ const FloorPlanMap = ({
               opacity={opacity}
               idwPower={idwPower}
               displayDimensions={{ width: baseWidth, height: baseHeight }}
+            />
+
+            {/* Zonas fijas de triangulación */}
+            <FixedZones
+              epicenter={epicenter}
+              tilesToPixels={tilesToPixels}
+              sensorData={sensorData}
             />
 
             {/* Zona Epicentro */}
