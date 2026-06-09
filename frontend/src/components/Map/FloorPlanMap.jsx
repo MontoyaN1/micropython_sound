@@ -155,7 +155,12 @@ const pointInTriangle = (px, py, v0, v1, v2) => {
 };
 
 // Componente para renderizar las zonas fijas de triangulación
-const FixedZones = ({ epicenter, tilesToPixels, sensorData }) => {
+const FixedZones = ({
+  epicenter,
+  tilesToPixels,
+  sensorData,
+  displayDimensions = { width: PLAN_IMAGE_WIDTH, height: PLAN_IMAGE_HEIGHT },
+}) => {
   // Siempre renderizar las zonas (incluso sin epicentro)
   // Si hay epicentro, encontrar qué zona lo contiene
   let activeZoneId = null;
@@ -232,14 +237,18 @@ const FixedZones = ({ epicenter, tilesToPixels, sensorData }) => {
     // Si no hay zonas candidatas, activeZoneId queda null
   }
 
+  // Usar dimensiones del contenedor para el SVG
+  const svgWidth = displayDimensions.width || PLAN_IMAGE_WIDTH;
+  const svgHeight = displayDimensions.height || PLAN_IMAGE_HEIGHT;
+
   return (
     <div
       className="absolute inset-0 pointer-events-none"
       style={{ zIndex: 10 }}
     >
       <svg
-        width="100%"
-        height="100%"
+        width={svgWidth}
+        height={svgHeight}
         style={{ position: "absolute", top: 0, left: 0 }}
       >
         {FIXED_ZONES.map((zone) => {
@@ -435,13 +444,18 @@ const SensorMarker = ({
         <div
           className={`absolute w-64 sm:w-72 bg-white rounded-lg shadow-xl p-4 z-[100] border border-gray-200 ${
             tooltipPosition === "top"
-              ? "left-1/2 transform -translate-x-1/2 bottom-full mb-12"
+              ? "left-1/2 transform -translate-x-1/2 bottom-full mb-12 max-sm:left-2 max-sm:transform-none"
               : tooltipPosition === "bottom"
-                ? "left-1/2 transform -translate-x-1/2 top-full mt-12"
+                ? "left-1/2 transform -translate-x-1/2 top-full mt-12 max-sm:left-2 max-sm:transform-none"
                 : tooltipPosition === "right"
-                  ? "top-1/2 transform -translate-y-1/2 left-full ml-12"
-                  : "top-1/2 transform -translate-y-1/2 right-full mr-12"
+                  ? "top-1/2 transform -translate-y-1/2 left-full ml-12 max-sm:top-auto max-sm:bottom-full max-sm:mb-12 max-sm:left-1/2 max-sm:-translate-x-1/2"
+                  : "top-1/2 transform -translate-y-1/2 right-full mr-12 max-sm:top-auto max-sm:bottom-full max-sm:mb-12 max-sm:left-1/2 max-sm:-translate-x-1/2"
           }`}
+          style={{
+            maxHeight: "80vh",
+            maxWidth: "calc(100vw - 16px)",
+            overflow: "auto",
+          }}
           onTouchStart={(e) => {
             e.stopPropagation();
           }}
@@ -1714,7 +1728,7 @@ const FloorPlanMap = ({
       {/* Contenedor del plano sin scroll */}
       <div
         className="relative rounded-2xl shadow-lg bg-gray-900 h-full w-full flex flex-col"
-        style={{ overscrollBehavior: "none" }}
+        style={{ overscrollBehavior: "auto" }}
       >
         {/* Contenedor del mapa interno - permitir scroll si es necesario en móviles */}
         <div className="w-full h-full p-0 bg-gray-900 overflow-hidden">
@@ -1733,7 +1747,7 @@ const FloorPlanMap = ({
               transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
               transformOrigin: "0 0",
               cursor: isDragging ? "grabbing" : "grab",
-              touchAction: "none", // Prevenir scroll nativo en dispositivos táctiles
+              touchAction: "pan-y", // Permitir scroll vertical, pan horizontal con arrastre
               userSelect: "none", // Prevenir selección de texto al arrastrar
               WebkitUserSelect: "none", // Para Safari
               MozUserSelect: "none", // Para Firefox
@@ -2140,6 +2154,7 @@ const FloorPlanMap = ({
               epicenter={epicenter}
               tilesToPixels={tilesToPixels}
               sensorData={sensorData}
+              displayDimensions={{ width: baseWidth, height: baseHeight }}
             />
 
             {/* Zona Epicentro */}
