@@ -14,6 +14,7 @@ Sistema IoT para monitoreo y visualización de niveles de ruido en tiempo real, 
 
 ## Arquitectura del Sistema
 
+
 ### Diagrama de Componentes
 
 ```

@@ -350,8 +350,8 @@ const RealTimePage = () => {
         {/* Mapa - ocupa 2/3 del espacio */}
         <div className="lg:col-span-2">
           <div
-            className="card p-4 overflow-hidden"
-            style={{ overscrollBehavior: "none" }}
+            className="card p-4 overflow-auto"
+            style={{ overscrollBehavior: "auto" }}
           >
             <div className="p-2 sm:p-3 border-b border-primary-200">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-0">
@@ -722,7 +722,8 @@ const RealTimePage = () => {
                     <td className="py-2 px-2 sm:py-3 sm:px-4">
                       <div className="text-xs sm:text-sm text-primary-600">
                         X {(sensor.longitude * TILE_SIZE_METERS).toFixed(1)} - Y{" "}
-                        {(sensor.latitude * TILE_SIZE_METERS).toFixed(1)} m aprox
+                        {(sensor.latitude * TILE_SIZE_METERS).toFixed(1)} m
+                        aprox
                       </div>
                     </td>
                     <td className="py-2 px-2 sm:py-3 sm:px-4">
